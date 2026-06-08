@@ -4,8 +4,11 @@ const sampleEmployees = [
   Employee(id: '1', name: 'Ana Carolina Martins', unit: Unit.adm),
   Employee(id: '2', name: 'Bruno Silva Rocha', unit: Unit.geral),
   Employee(id: '3', name: 'Camila Nogueira', unit: Unit.largoDoMachado),
-  Employee(id: '4', name: 'Diego Almeida', unit: Unit.ktt1),
-  Employee(id: '5', name: 'Fernanda Lima', unit: Unit.ktt3),
+  Employee(id: '4', name: 'Daniela Costa', unit: Unit.laranj),
+  Employee(id: '5', name: 'Diego Almeida', unit: Unit.ktt1),
+  Employee(id: '6', name: 'Eduardo Pereira', unit: Unit.ktt2),
+  Employee(id: '7', name: 'Fernanda Lima', unit: Unit.ktt3),
+  Employee(id: '8', name: 'Gabriel Souza', unit: Unit.ktt4),
 ];
 
 MonthlyStatement sampleStatement(Employee employee) {

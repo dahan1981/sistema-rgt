@@ -37,13 +37,32 @@ class _RgtHomePageState extends State<RgtHomePage> {
   final _calculator = const RgtCalculator();
   var _selectedIndex = 0;
   var _selectedEmployee = sampleEmployees.first;
+  var _selectedUnit = sampleEmployees.first.unit;
   late MonthlyStatement _statement = sampleStatement(_selectedEmployee);
 
   void _selectEmployee(Employee employee) {
     setState(() {
       _selectedEmployee = employee;
+      _selectedUnit = employee.unit;
       _statement = sampleStatement(employee);
       _selectedIndex = 2;
+    });
+  }
+
+  void _selectUnit(Unit unit) {
+    final employeesInUnit = sampleEmployees.where((employee) {
+      return employee.unit == unit;
+    }).toList();
+
+    if (employeesInUnit.isEmpty) {
+      return;
+    }
+
+    final employee = employeesInUnit.first;
+    setState(() {
+      _selectedUnit = unit;
+      _selectedEmployee = employee;
+      _statement = sampleStatement(employee);
     });
   }
 
@@ -56,7 +75,9 @@ class _RgtHomePageState extends State<RgtHomePage> {
       DashboardPage(statement: _statement, summary: summary),
       EmployeesPage(
         employees: sampleEmployees,
+        selectedUnit: _selectedUnit,
         selectedEmployee: _selectedEmployee,
+        onUnitSelected: _selectUnit,
         onEmployeeSelected: _selectEmployee,
       ),
       StatementPage(
@@ -332,17 +353,25 @@ class DashboardPage extends StatelessWidget {
 class EmployeesPage extends StatelessWidget {
   const EmployeesPage({
     required this.employees,
+    required this.selectedUnit,
     required this.selectedEmployee,
+    required this.onUnitSelected,
     required this.onEmployeeSelected,
     super.key,
   });
 
   final List<Employee> employees;
+  final Unit selectedUnit;
   final Employee selectedEmployee;
+  final ValueChanged<Unit> onUnitSelected;
   final ValueChanged<Employee> onEmployeeSelected;
 
   @override
   Widget build(BuildContext context) {
+    final filteredEmployees = employees.where((employee) {
+      return employee.unit == selectedUnit;
+    }).toList();
+
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -351,7 +380,65 @@ class EmployeesPage extends StatelessWidget {
           subtitle: 'Base inicial para vincular demonstrativos por unidade.',
         ),
         const SizedBox(height: 16),
-        for (final employee in employees)
+        SectionPanel(
+          title: 'Filtros vinculados',
+          child: ResponsiveGrid(
+            children: [
+              DropdownButtonFormField<Unit>(
+                value: selectedUnit,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Unidade',
+                ),
+                items: Unit.values
+                    .map(
+                      (unit) => DropdownMenuItem(
+                        value: unit,
+                        child: Text(unit.label),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (unit) {
+                  if (unit != null) {
+                    onUnitSelected(unit);
+                  }
+                },
+              ),
+              DropdownButtonFormField<Employee>(
+                value: filteredEmployees.contains(selectedEmployee)
+                    ? selectedEmployee
+                    : filteredEmployees.first,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Colaborador',
+                ),
+                items: filteredEmployees
+                    .map(
+                      (employee) => DropdownMenuItem(
+                        value: employee,
+                        child: Text(employee.name),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (employee) {
+                  if (employee != null) {
+                    onEmployeeSelected(employee);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          '${filteredEmployees.length} colaborador(es) em ${selectedUnit.label}',
+          style: const TextStyle(
+            color: Color(0xFF5E6762),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 10),
+        for (final employee in filteredEmployees)
           EmployeeRow(
             employee: employee,
             selected: employee.id == selectedEmployee.id,
