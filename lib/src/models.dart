@@ -1,0 +1,108 @@
+enum Unit {
+  adm('ADM'),
+  geral('GERAL'),
+  largoDoMachado('LARGO DO MACHADO'),
+  laranj('LARANJ'),
+  ktt1('KTT1'),
+  ktt2('KTT2'),
+  ktt3('KTT3'),
+  ktt4('KTT4');
+
+  const Unit(this.label);
+
+  final String label;
+}
+
+enum Incentive {
+  none('Sem incentivo', 0),
+  total('Incentivo Total', 150),
+  level1('Incentivo 1', 100),
+  level2('Incentivo 2', 50);
+
+  const Incentive(this.label, this.amount);
+
+  final String label;
+  final double amount;
+}
+
+class Employee {
+  const Employee({
+    required this.id,
+    required this.name,
+    required this.unit,
+  });
+
+  final String id;
+  final String name;
+  final Unit unit;
+}
+
+class CashEntry {
+  const CashEntry({
+    required this.date,
+    required this.description,
+    required this.amount,
+  });
+
+  final DateTime date;
+  final String description;
+  final double amount;
+}
+
+class MonthlyStatement {
+  const MonthlyStatement({
+    required this.employee,
+    required this.referenceMonth,
+    required this.salaryForecast,
+    required this.vouchers,
+    required this.absences,
+    required this.discountAbsencesAsExpense,
+    required this.attendanceScore,
+    required this.incentive,
+    required this.sundayCompensation,
+    required this.launchSundayAsRevenue,
+    required this.doubleShift,
+    required this.launchDoubleShiftAsRevenue,
+    required this.balanceBonus,
+    required this.launchBalanceBonusAsRevenue,
+    required this.positiveCashEntries,
+    required this.negativeCashEntries,
+    required this.launchNegativeCashAsExpense,
+  });
+
+  final Employee employee;
+  final DateTime referenceMonth;
+  final double salaryForecast;
+  final double vouchers;
+  final int absences;
+  final bool discountAbsencesAsExpense;
+  final int attendanceScore;
+  final Incentive incentive;
+  final double sundayCompensation;
+  final bool launchSundayAsRevenue;
+  final double doubleShift;
+  final bool launchDoubleShiftAsRevenue;
+  final double balanceBonus;
+  final bool launchBalanceBonusAsRevenue;
+  final List<CashEntry> positiveCashEntries;
+  final List<CashEntry> negativeCashEntries;
+  final bool launchNegativeCashAsExpense;
+}
+
+class FinancialSummary {
+  const FinancialSummary({
+    required this.revenues,
+    required this.expenses,
+    required this.absenceDiscount,
+    required this.positiveCash,
+    required this.negativeCash,
+    required this.finalLiability,
+  });
+
+  final double revenues;
+  final double expenses;
+  final double absenceDiscount;
+  final double positiveCash;
+  final double negativeCash;
+  final double finalLiability;
+}
