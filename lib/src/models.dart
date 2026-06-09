@@ -93,6 +93,23 @@ class CashClosingSummary {
   double get balance => positive - negative;
 }
 
+class ReportOptions {
+  const ReportOptions({
+    required this.includeFinancialStatement,
+    required this.includeGeneralCashClosing,
+    required this.includeEmployeeCashClosing,
+  });
+
+  final bool includeFinancialStatement;
+  final bool includeGeneralCashClosing;
+  final bool includeEmployeeCashClosing;
+
+  bool get hasSelection =>
+      includeFinancialStatement ||
+      includeGeneralCashClosing ||
+      includeEmployeeCashClosing;
+}
+
 class MonthlyStatement {
   const MonthlyStatement({
     required this.employee,

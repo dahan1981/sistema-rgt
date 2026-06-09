@@ -69,4 +69,16 @@ void main() {
     expect(find.text('Valor do incentivo'), findsOneWidget);
     expect(find.text('R\$ 100,00'), findsWidgets);
   });
+
+  testWidgets('opens report options with cash closing choices', (tester) async {
+    await tester.pumpWidget(const SistemaRgtApp());
+
+    await tester.tap(find.byTooltip('Gerar relatorio'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Gerar relatorio'), findsOneWidget);
+    expect(find.text('Fechamento de caixa geral'), findsOneWidget);
+    expect(find.text('Fechamento de caixa por colaborador'), findsOneWidget);
+    expect(find.text('Preparar relatorio'), findsOneWidget);
+  });
 }

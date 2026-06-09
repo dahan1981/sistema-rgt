@@ -75,6 +75,45 @@ class _RgtHomePageState extends State<RgtHomePage> {
     });
   }
 
+  Future<void> _openReportOptions() async {
+    final options = await showDialog<ReportOptions>(
+      context: context,
+      builder: (context) {
+        return ReportOptionsDialog(
+          selectedEmployee: _selectedEmployee,
+          selectedUnit: _selectedUnit,
+        );
+      },
+    );
+
+    if (!mounted || options == null) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_reportMessage(options)),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _reportMessage(ReportOptions options) {
+    final parts = <String>[];
+
+    if (options.includeFinancialStatement) {
+      parts.add('demonstrativo mensal');
+    }
+    if (options.includeGeneralCashClosing) {
+      parts.add('fechamento de caixa geral');
+    }
+    if (options.includeEmployeeCashClosing) {
+      parts.add('fechamento por colaborador');
+    }
+
+    return 'Relatorio preparado: ${parts.join(', ')}.';
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.sizeOf(context).width >= 900;
@@ -126,7 +165,7 @@ class _RgtHomePageState extends State<RgtHomePage> {
             child: SafeArea(
               child: Column(
                 children: [
-                  const AppHeader(),
+                  AppHeader(onReportRequested: _openReportOptions),
                   Expanded(child: pages[_selectedIndex]),
                 ],
               ),
@@ -169,7 +208,12 @@ class _RgtHomePageState extends State<RgtHomePage> {
 }
 
 class AppHeader extends StatelessWidget {
-  const AppHeader({super.key});
+  const AppHeader({
+    required this.onReportRequested,
+    super.key,
+  });
+
+  final VoidCallback onReportRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -211,12 +255,131 @@ class AppHeader extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: 'Exportar relatorio',
-            onPressed: () {},
+            tooltip: 'Gerar relatorio',
+            onPressed: onReportRequested,
             icon: const Icon(Icons.picture_as_pdf_outlined),
           ),
         ],
       ),
+    );
+  }
+}
+
+class ReportOptionsDialog extends StatefulWidget {
+  const ReportOptionsDialog({
+    required this.selectedEmployee,
+    required this.selectedUnit,
+    super.key,
+  });
+
+  final Employee selectedEmployee;
+  final Unit selectedUnit;
+
+  @override
+  State<ReportOptionsDialog> createState() => _ReportOptionsDialogState();
+}
+
+class _ReportOptionsDialogState extends State<ReportOptionsDialog> {
+  var _includeFinancialStatement = true;
+  var _includeGeneralCashClosing = true;
+  var _includeEmployeeCashClosing = true;
+
+  bool get _hasSelection {
+    return _includeFinancialStatement ||
+        _includeGeneralCashClosing ||
+        _includeEmployeeCashClosing;
+  }
+
+  void _submit() {
+    Navigator.of(context).pop(
+      ReportOptions(
+        includeFinancialStatement: _includeFinancialStatement,
+        includeGeneralCashClosing: _includeGeneralCashClosing,
+        includeEmployeeCashClosing: _includeEmployeeCashClosing,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Gerar relatorio'),
+      content: SizedBox(
+        width: 460,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${widget.selectedUnit.label} - ${widget.selectedEmployee.name}',
+              style: const TextStyle(color: Color(0xFF5E6762)),
+            ),
+            const SizedBox(height: 16),
+            ReportCheckbox(
+              title: 'Demonstrativo mensal',
+              subtitle: 'Resumo financeiro do colaborador selecionado.',
+              value: _includeFinancialStatement,
+              onChanged: (value) {
+                setState(() => _includeFinancialStatement = value);
+              },
+            ),
+            ReportCheckbox(
+              title: 'Fechamento de caixa geral',
+              subtitle: 'Consolidado mensal por todas as unidades.',
+              value: _includeGeneralCashClosing,
+              onChanged: (value) {
+                setState(() => _includeGeneralCashClosing = value);
+              },
+            ),
+            ReportCheckbox(
+              title: 'Fechamento de caixa por colaborador',
+              subtitle: 'Lancamentos do colaborador atualmente selecionado.',
+              value: _includeEmployeeCashClosing,
+              onChanged: (value) {
+                setState(() => _includeEmployeeCashClosing = value);
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton.icon(
+          onPressed: _hasSelection ? _submit : null,
+          icon: const Icon(Icons.picture_as_pdf_outlined),
+          label: const Text('Preparar relatorio'),
+        ),
+      ],
+    );
+  }
+}
+
+class ReportCheckbox extends StatelessWidget {
+  const ReportCheckbox({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+    super.key,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return CheckboxListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+      subtitle: Text(subtitle),
+      value: value,
+      onChanged: (value) => onChanged(value ?? false),
+      controlAffinity: ListTileControlAffinity.leading,
     );
   }
 }

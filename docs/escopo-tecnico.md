@@ -16,6 +16,18 @@ Este documento traduz o PDF de demonstrativo mensal em modulos de aplicativo.
 - Exportacao futura de PDF e Excel.
 - Auditoria de alteracoes.
 
+## Relatorios
+
+Ao iniciar a geracao de relatorio, o RH deve escolher em uma caixa de selecao
+quais blocos entram no documento:
+
+- Demonstrativo mensal do colaborador.
+- Fechamento de caixa geral.
+- Fechamento de caixa por colaborador.
+
+O fechamento geral deve consolidar o mes vigente ate a data atual. O fechamento
+por colaborador deve respeitar o colaborador selecionado no aplicativo.
+
 ## Regra de calculo inicial
 
 O app calcula localmente:
