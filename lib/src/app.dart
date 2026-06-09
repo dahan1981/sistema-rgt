@@ -926,9 +926,14 @@ class EmployeesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final filteredEmployees = employees.where((employee) {
-      return employee.unit == selectedUnit;
-    }).toList();
+    final filteredEmployees = selectedUnit == Unit.geral
+        ? employees
+        : employees.where((employee) {
+            return employee.unit == selectedUnit;
+          }).toList();
+    final filterLabel = selectedUnit == Unit.geral
+        ? 'todos os funcionarios'
+        : selectedUnit.label;
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -989,7 +994,7 @@ class EmployeesPage extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         Text(
-          '${filteredEmployees.length} colaborador(es) em ${selectedUnit.label}',
+          '${filteredEmployees.length} colaborador(es) em $filterLabel',
           style: const TextStyle(
             color: Color(0xFF5E6762),
             fontWeight: FontWeight.w600,

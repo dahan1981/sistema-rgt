@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:sistema_rgt/src/calculator.dart';
@@ -61,6 +62,33 @@ void main() {
     expect(find.text('Fechamento de caixa'), findsOneWidget);
     expect(find.text('Caixa positivo no mes'), findsOneWidget);
     expect(find.text('Descontar em folha'), findsOneWidget);
+  });
+
+  testWidgets('general collaborator filter shows all employees',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: EmployeesPage(
+            employees: sampleEmployees,
+            selectedUnit: Unit.geral,
+            selectedEmployee: sampleEmployees.first,
+            onUnitSelected: (_) {},
+            onEmployeeSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('8 colaborador(es) em todos os funcionarios'),
+        findsOneWidget);
+    expect(find.text('Ana Carolina Martins'), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.text('Gabriel Souza'),
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Gabriel Souza'), findsOneWidget);
   });
 
   testWidgets('shows incentive score and calculated amount', (tester) async {
