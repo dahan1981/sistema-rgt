@@ -1,5 +1,5 @@
 enum Unit {
-  adm('ADM'),
+  adm('Administracao'),
   geral('GERAL'),
   largoDoMachado('LARGO DO MACHADO'),
   laranj('LARANJ'),

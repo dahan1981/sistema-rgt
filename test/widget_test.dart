@@ -47,7 +47,7 @@ void main() {
     expect(find.text('Painel global'), findsOneWidget);
     expect(find.text('Filtro de banca'), findsOneWidget);
     expect(find.text('Passivo global'), findsOneWidget);
-    expect(find.text('Todas as bancas'), findsOneWidget);
+    expect(find.text('Todos os funcionarios'), findsOneWidget);
   });
 
   testWidgets('opens cash closing page', (tester) async {

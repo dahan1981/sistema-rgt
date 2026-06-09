@@ -631,7 +631,7 @@ class DashboardHeader extends StatelessWidget {
         items: [
           const DropdownMenuItem<Unit?>(
             value: null,
-            child: Text('Todas as bancas'),
+            child: Text('Todos os funcionarios'),
           ),
           ...Unit.values.map(
             (unit) => DropdownMenuItem<Unit?>(
