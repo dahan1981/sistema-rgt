@@ -1539,6 +1539,13 @@ class _CashClosingPageState extends State<CashClosingPage> {
     final employees = _filteredEmployees;
     final entries = _visibleEntries;
     final summary = _summary;
+    final isGlobalUnit = widget.selectedUnit == Unit.geral;
+    final selectedEmployee = isGlobalUnit
+        ? null
+        : employees.contains(widget.selectedEmployee)
+            ? widget.selectedEmployee
+            : null;
+    final canSubmit = _amount > 0 && selectedEmployee != null;
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -1600,22 +1607,25 @@ class _CashClosingPageState extends State<CashClosingPage> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<Employee>(
-                    value: employees.contains(widget.selectedEmployee)
-                        ? widget.selectedEmployee
-                        : null,
+                  DropdownButtonFormField<Employee?>(
+                    value: selectedEmployee,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       labelText: 'Colaborador',
                     ),
-                    items: employees
-                        .map(
-                          (employee) => DropdownMenuItem(
-                            value: employee,
-                            child: Text(employee.name),
-                          ),
-                        )
-                        .toList(),
+                    items: [
+                      if (isGlobalUnit)
+                        const DropdownMenuItem<Employee?>(
+                          value: null,
+                          child: Text('Todos'),
+                        ),
+                      ...employees.map(
+                        (employee) => DropdownMenuItem<Employee?>(
+                          value: employee,
+                          child: Text(employee.name),
+                        ),
+                      ),
+                    ],
                     onChanged: (employee) {
                       if (employee != null) {
                         widget.onEmployeeSelected(employee);
@@ -1683,7 +1693,7 @@ class _CashClosingPageState extends State<CashClosingPage> {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
-                      onPressed: _amount > 0 ? _submit : null,
+                      onPressed: canSubmit ? _submit : null,
                       icon: const Icon(Icons.save_outlined),
                       label: const Text('Lancar caixa'),
                     ),

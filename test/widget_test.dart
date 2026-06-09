@@ -83,7 +83,7 @@ void main() {
 
     expect(find.text('Fechamento de caixa'), findsOneWidget);
     expect(find.text('Todos os colaboladores'), findsOneWidget);
-    expect(find.text('Ana Carolina Martins'), findsWidgets);
+    expect(find.text('Todos'), findsOneWidget);
     expect(find.text('R\$ 116,25'), findsOneWidget);
     expect(find.text('R\$ 42,00'), findsWidgets);
   });
