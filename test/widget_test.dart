@@ -58,4 +58,15 @@ void main() {
     expect(find.text('Caixa positivo no mes'), findsOneWidget);
     expect(find.text('Descontar em folha'), findsOneWidget);
   });
+
+  testWidgets('shows incentive score and calculated amount', (tester) async {
+    await tester.pumpWidget(const SistemaRgtApp());
+
+    await tester.tap(find.text('Mensal'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pontuacao de incentivo'), findsOneWidget);
+    expect(find.text('Valor do incentivo'), findsOneWidget);
+    expect(find.text('R\$ 100,00'), findsWidgets);
+  });
 }

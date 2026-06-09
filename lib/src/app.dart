@@ -603,6 +603,7 @@ class StatementPage extends StatelessWidget {
             SectionPanel(
               title: 'Assiduidade e receitas',
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   NumberStepper(
                     label: 'Pontuacao de assiduidade',
@@ -611,16 +612,18 @@ class StatementPage extends StatelessWidget {
                       statement.copyWith(attendanceScore: value),
                     ),
                   ),
+                  const SizedBox(height: 4),
                   DropdownButtonFormField<Incentive>(
                     value: statement.incentive,
-                    decoration: const InputDecoration(labelText: 'Incentivo'),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Pontuacao de incentivo',
+                    ),
                     items: Incentive.values
                         .map(
                           (item) => DropdownMenuItem(
                             value: item,
-                            child: Text(
-                              '${item.label} - ${formatCurrency(item.amount)}',
-                            ),
+                            child: Text(item.label),
                           ),
                         )
                         .toList(),
@@ -630,17 +633,21 @@ class StatementPage extends StatelessWidget {
                       }
                     },
                   ),
-                  MoneyField(
+                  const SizedBox(height: 12),
+                  ReadOnlyMoneyField(
+                    label: 'Valor do incentivo',
+                    value: statement.incentive.amount,
+                  ),
+                  const SizedBox(height: 12),
+                  RevenueToggleField(
                     label: 'Domingo compensatorio',
                     value: statement.sundayCompensation,
+                    enabledLabel: 'Lancar domingo em receita',
+                    enabled: statement.launchSundayAsRevenue,
                     onChanged: (value) => onChanged(
                       statement.copyWith(sundayCompensation: value),
                     ),
-                  ),
-                  SwitchRow(
-                    label: 'Lancar domingo em receita',
-                    value: statement.launchSundayAsRevenue,
-                    onChanged: (value) => onChanged(
+                    onEnabledChanged: (value) => onChanged(
                       statement.copyWith(launchSundayAsRevenue: value),
                     ),
                   ),
@@ -1172,11 +1179,13 @@ class MoneyField extends StatefulWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.bottomPadding = 12,
     super.key,
   });
 
   final String label;
   final double value;
+  final double bottomPadding;
   final ValueChanged<double> onChanged;
 
   @override
@@ -1211,7 +1220,7 @@ class _MoneyFieldState extends State<MoneyField> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.only(bottom: widget.bottomPadding),
       child: TextField(
         controller: _controller,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1226,6 +1235,79 @@ class _MoneyFieldState extends State<MoneyField> {
             widget.onChanged(value);
           }
         },
+      ),
+    );
+  }
+}
+
+class ReadOnlyMoneyField extends StatelessWidget {
+  const ReadOnlyMoneyField({
+    required this.label,
+    required this.value,
+    super.key,
+  });
+
+  final String label;
+  final double value;
+
+  @override
+  Widget build(BuildContext context) {
+    return InputDecorator(
+      decoration: InputDecoration(
+        border: const OutlineInputBorder(),
+        labelText: label,
+        filled: true,
+        fillColor: const Color(0xFFF6F7F4),
+      ),
+      child: Text(
+        formatCurrency(value),
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+class RevenueToggleField extends StatelessWidget {
+  const RevenueToggleField({
+    required this.label,
+    required this.value,
+    required this.enabledLabel,
+    required this.enabled,
+    required this.onChanged,
+    required this.onEnabledChanged,
+    super.key,
+  });
+
+  final String label;
+  final double value;
+  final String enabledLabel;
+  final bool enabled;
+  final ValueChanged<double> onChanged;
+  final ValueChanged<bool> onEnabledChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F7F4),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE1E5DF)),
+      ),
+      child: Column(
+        children: [
+          MoneyField(
+            label: label,
+            value: value,
+            onChanged: onChanged,
+            bottomPadding: 8,
+          ),
+          SwitchRow(
+            label: enabledLabel,
+            value: enabled,
+            onChanged: onEnabledChanged,
+          ),
+        ],
       ),
     );
   }
@@ -1288,11 +1370,14 @@ class SwitchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SwitchListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(label),
-      value: value,
-      onChanged: onChanged,
+    return Material(
+      color: Colors.transparent,
+      child: SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(label),
+        value: value,
+        onChanged: onChanged,
+      ),
     );
   }
 }

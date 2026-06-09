@@ -53,7 +53,7 @@ MonthlyStatement sampleStatement(Employee employee) {
     absences: 1,
     discountAbsencesAsExpense: true,
     attendanceScore: 94,
-    incentive: Incentive.level1,
+    incentive: Incentive.score2,
     sundayCompensation: 80,
     launchSundayAsRevenue: true,
     doubleShift: 120,

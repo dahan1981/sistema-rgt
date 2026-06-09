@@ -14,10 +14,9 @@ enum Unit {
 }
 
 enum Incentive {
-  none('Sem incentivo', 0),
-  total('Incentivo Total', 150),
-  level1('Incentivo 1', 100),
-  level2('Incentivo 2', 50);
+  score1('Pontuacao 1', 50),
+  score2('Pontuacao 2', 100),
+  score3('Pontuacao 3', 150);
 
   const Incentive(this.label, this.amount);
 
