@@ -10,4 +10,15 @@ void main() {
     expect(find.text('Passivo final'), findsOneWidget);
     expect(find.text('Receitas'), findsOneWidget);
   });
+
+  testWidgets('opens cash closing page', (tester) async {
+    await tester.pumpWidget(const SistemaRgtApp());
+
+    await tester.tap(find.text('Caixa'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Fechamento de caixa'), findsOneWidget);
+    expect(find.text('Caixa positivo no mes'), findsOneWidget);
+    expect(find.text('Descontar em folha'), findsOneWidget);
+  });
 }

@@ -43,6 +43,53 @@ create table if not exists public.cash_entries (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.cash_closings (
+  id uuid primary key default gen_random_uuid(),
+  entry_date date not null,
+  unit_id text not null references public.units(id),
+  employee_id uuid not null references public.employees(id),
+  kind text not null check (kind in ('positive', 'negative')),
+  amount numeric(12, 2) not null check (amount > 0),
+  description text not null,
+  deduct_from_payroll boolean not null default false,
+  created_at timestamptz not null default now(),
+  check (
+    kind = 'negative'
+    or deduct_from_payroll = false
+  )
+);
+
+create index if not exists cash_closings_month_lookup_idx
+on public.cash_closings (entry_date, unit_id, employee_id);
+
+create or replace function public.calculate_cash_closing_month(
+  target_unit_id text,
+  target_employee_id uuid,
+  target_date date default current_date
+)
+returns table (
+  positive numeric,
+  negative numeric,
+  payroll_deductions numeric,
+  balance numeric
+)
+language sql
+stable
+as $$
+  select
+    coalesce(sum(amount) filter (where kind = 'positive'), 0) as positive,
+    coalesce(sum(amount) filter (where kind = 'negative'), 0) as negative,
+    coalesce(sum(amount) filter (
+      where kind = 'negative' and deduct_from_payroll
+    ), 0) as payroll_deductions,
+    coalesce(sum(case when kind = 'positive' then amount else -amount end), 0) as balance
+  from public.cash_closings
+  where unit_id = target_unit_id
+    and employee_id = target_employee_id
+    and entry_date >= date_trunc('month', target_date)::date
+    and entry_date <= target_date;
+$$;
+
 create or replace function public.calculate_statement_total(statement_id uuid)
 returns table (
   revenues numeric,

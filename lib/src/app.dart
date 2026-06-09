@@ -38,6 +38,9 @@ class _RgtHomePageState extends State<RgtHomePage> {
   var _selectedIndex = 0;
   var _selectedEmployee = sampleEmployees.first;
   var _selectedUnit = sampleEmployees.first.unit;
+  late final List<CashClosingEntry> _cashClosings = [
+    ...sampleCashClosings,
+  ];
   late MonthlyStatement _statement = sampleStatement(_selectedEmployee);
 
   void _selectEmployee(Employee employee) {
@@ -66,6 +69,12 @@ class _RgtHomePageState extends State<RgtHomePage> {
     });
   }
 
+  void _addCashClosing(CashClosingEntry entry) {
+    setState(() {
+      _cashClosings.insert(0, entry);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.sizeOf(context).width >= 900;
@@ -84,6 +93,20 @@ class _RgtHomePageState extends State<RgtHomePage> {
         statement: _statement,
         summary: summary,
         onChanged: (statement) => setState(() => _statement = statement),
+      ),
+      CashClosingPage(
+        employees: sampleEmployees,
+        entries: _cashClosings,
+        selectedUnit: _selectedUnit,
+        selectedEmployee: _selectedEmployee,
+        onUnitSelected: _selectUnit,
+        onEmployeeSelected: (employee) {
+          setState(() {
+            _selectedEmployee = employee;
+            _selectedUnit = employee.unit;
+          });
+        },
+        onEntryAdded: _addCashClosing,
       ),
     ];
 
@@ -129,6 +152,11 @@ class _RgtHomePageState extends State<RgtHomePage> {
                   icon: Icon(Icons.receipt_long_outlined),
                   selectedIcon: Icon(Icons.receipt_long),
                   label: 'Mensal',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.point_of_sale_outlined),
+                  selectedIcon: Icon(Icons.point_of_sale),
+                  label: 'Caixa',
                 ),
               ],
             ),
@@ -234,6 +262,12 @@ class RgtSideNav extends StatelessWidget {
             label: 'Demonstrativo mensal',
             selected: selectedIndex == 2,
             onTap: () => onChanged(2),
+          ),
+          NavButton(
+            icon: Icons.point_of_sale_outlined,
+            label: 'Fechamento de caixa',
+            selected: selectedIndex == 3,
+            onTap: () => onChanged(3),
           ),
           const Spacer(),
           const Text(
@@ -658,6 +692,355 @@ class StatementPage extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+class CashClosingPage extends StatefulWidget {
+  const CashClosingPage({
+    required this.employees,
+    required this.entries,
+    required this.selectedUnit,
+    required this.selectedEmployee,
+    required this.onUnitSelected,
+    required this.onEmployeeSelected,
+    required this.onEntryAdded,
+    super.key,
+  });
+
+  final List<Employee> employees;
+  final List<CashClosingEntry> entries;
+  final Unit selectedUnit;
+  final Employee selectedEmployee;
+  final ValueChanged<Unit> onUnitSelected;
+  final ValueChanged<Employee> onEmployeeSelected;
+  final ValueChanged<CashClosingEntry> onEntryAdded;
+
+  @override
+  State<CashClosingPage> createState() => _CashClosingPageState();
+}
+
+class _CashClosingPageState extends State<CashClosingPage> {
+  final _descriptionController = TextEditingController();
+  var _date = DateTime.now();
+  var _type = CashClosingType.positive;
+  var _amount = 0.0;
+  var _deductFromPayroll = false;
+
+  @override
+  void dispose() {
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  List<Employee> get _filteredEmployees {
+    return widget.employees.where((employee) {
+      return employee.unit == widget.selectedUnit;
+    }).toList();
+  }
+
+  List<CashClosingEntry> get _visibleEntries {
+    final now = DateTime.now();
+    return widget.entries.where((entry) {
+      final sameMonth =
+          entry.date.year == now.year && entry.date.month == now.month;
+      final untilToday = !entry.date.isAfter(now);
+      return sameMonth &&
+          untilToday &&
+          entry.unit == widget.selectedUnit &&
+          entry.employee.id == widget.selectedEmployee.id;
+    }).toList();
+  }
+
+  CashClosingSummary get _summary {
+    var positive = 0.0;
+    var negative = 0.0;
+    var payrollDeductions = 0.0;
+
+    for (final entry in _visibleEntries) {
+      if (entry.type == CashClosingType.positive) {
+        positive += entry.amount;
+      } else {
+        negative += entry.amount;
+        if (entry.deductFromPayroll) {
+          payrollDeductions += entry.amount;
+        }
+      }
+    }
+
+    return CashClosingSummary(
+      positive: positive,
+      negative: negative,
+      payrollDeductions: payrollDeductions,
+    );
+  }
+
+  Future<void> _pickDate() async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+
+    if (selected != null) {
+      setState(() => _date = selected);
+    }
+  }
+
+  void _submit() {
+    if (_amount <= 0) {
+      return;
+    }
+
+    final description = _descriptionController.text.trim();
+    widget.onEntryAdded(
+      CashClosingEntry(
+        id: 'cx-${DateTime.now().microsecondsSinceEpoch}',
+        date: _date,
+        unit: widget.selectedUnit,
+        employee: widget.selectedEmployee,
+        type: _type,
+        amount: _amount,
+        description: description.isEmpty ? 'Fechamento de caixa' : description,
+        deductFromPayroll:
+            _type == CashClosingType.negative && _deductFromPayroll,
+      ),
+    );
+
+    setState(() {
+      _amount = 0;
+      _descriptionController.clear();
+      _deductFromPayroll = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final employees = _filteredEmployees;
+    final entries = _visibleEntries;
+    final summary = _summary;
+
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const PageTitle(
+          title: 'Fechamento de caixa',
+          subtitle: 'Lancamentos por data, unidade e colaborador.',
+        ),
+        const SizedBox(height: 16),
+        ResponsiveGrid(
+          children: [
+            MetricCard(
+              title: 'Caixa positivo no mes',
+              value: formatCurrency(summary.positive),
+              icon: Icons.add_card_outlined,
+            ),
+            MetricCard(
+              title: 'Caixa negativo no mes',
+              value: formatCurrency(summary.negative),
+              icon: Icons.credit_card_off_outlined,
+            ),
+            MetricCard(
+              title: 'Saldo ate hoje',
+              value: formatCurrency(summary.balance),
+              icon: Icons.account_balance_outlined,
+            ),
+            MetricCard(
+              title: 'Descontar em folha',
+              value: formatCurrency(summary.payrollDeductions),
+              icon: Icons.payments_outlined,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        ResponsiveGrid(
+          children: [
+            SectionPanel(
+              title: 'Novo lancamento',
+              child: Column(
+                children: [
+                  DropdownButtonFormField<Unit>(
+                    value: widget.selectedUnit,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Unidade',
+                    ),
+                    items: Unit.values
+                        .map(
+                          (unit) => DropdownMenuItem(
+                            value: unit,
+                            child: Text(unit.label),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (unit) {
+                      if (unit != null) {
+                        widget.onUnitSelected(unit);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<Employee>(
+                    value: employees.contains(widget.selectedEmployee)
+                        ? widget.selectedEmployee
+                        : employees.first,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Colaborador',
+                    ),
+                    items: employees
+                        .map(
+                          (employee) => DropdownMenuItem(
+                            value: employee,
+                            child: Text(employee.name),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (employee) {
+                      if (employee != null) {
+                        widget.onEmployeeSelected(employee);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  SegmentedButton<CashClosingType>(
+                    segments: const [
+                      ButtonSegment(
+                        value: CashClosingType.positive,
+                        label: Text('Positivo'),
+                        icon: Icon(Icons.trending_up),
+                      ),
+                      ButtonSegment(
+                        value: CashClosingType.negative,
+                        label: Text('Negativo'),
+                        icon: Icon(Icons.trending_down),
+                      ),
+                    ],
+                    selected: {_type},
+                    onSelectionChanged: (values) {
+                      setState(() {
+                        _type = values.first;
+                        if (_type == CashClosingType.positive) {
+                          _deductFromPayroll = false;
+                        }
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  MoneyField(
+                    label: 'Valor do caixa',
+                    value: _amount,
+                    onChanged: (value) => setState(() => _amount = value),
+                  ),
+                  TextField(
+                    controller: _descriptionController,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Descricao',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _pickDate,
+                          icon: const Icon(Icons.calendar_month_outlined),
+                          label: Text(formatDate(_date)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_type == CashClosingType.negative)
+                    SwitchRow(
+                      label: 'Descontar de folha salarial',
+                      value: _deductFromPayroll,
+                      onChanged: (value) {
+                        setState(() => _deductFromPayroll = value);
+                      },
+                    ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _amount > 0 ? _submit : null,
+                      icon: const Icon(Icons.save_outlined),
+                      label: const Text('Lancar caixa'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SectionPanel(
+              title: 'Lancamentos do mes ate hoje',
+              child: entries.isEmpty
+                  ? const Text('Nenhum lancamento neste filtro.')
+                  : Column(
+                      children: [
+                        for (final entry in entries)
+                          CashClosingRow(entry: entry),
+                      ],
+                    ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class CashClosingRow extends StatelessWidget {
+  const CashClosingRow({required this.entry, super.key});
+
+  final CashClosingEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final isNegative = entry.type == CashClosingType.negative;
+    final color =
+        isNegative ? const Color(0xFF8E2F2F) : const Color(0xFF245B57);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F7F4),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE1E5DF)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isNegative ? Icons.remove_circle_outline : Icons.add_circle_outline,
+            color: color,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.description,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                Text('${formatDate(entry.date)} - ${entry.employee.name}'),
+                if (entry.deductFromPayroll)
+                  const Text(
+                    'Descontar de folha salarial',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF8E2F2F)),
+                  ),
+              ],
+            ),
+          ),
+          Text(
+            formatCurrency(entry.amount),
+            style: TextStyle(color: color, fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
     );
   }
 }

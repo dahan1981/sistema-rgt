@@ -11,6 +11,39 @@ const sampleEmployees = [
   Employee(id: '8', name: 'Gabriel Souza', unit: Unit.ktt4),
 ];
 
+final sampleCashClosings = [
+  CashClosingEntry(
+    id: 'cx-1',
+    date: DateTime(2026, 6, 3),
+    unit: Unit.adm,
+    employee: sampleEmployees[0],
+    type: CashClosingType.positive,
+    amount: 84.50,
+    description: 'Sobra de fechamento',
+    deductFromPayroll: false,
+  ),
+  CashClosingEntry(
+    id: 'cx-2',
+    date: DateTime(2026, 6, 5),
+    unit: Unit.geral,
+    employee: sampleEmployees[1],
+    type: CashClosingType.negative,
+    amount: 42.00,
+    description: 'Diferenca no caixa',
+    deductFromPayroll: true,
+  ),
+  CashClosingEntry(
+    id: 'cx-3',
+    date: DateTime(2026, 6, 8),
+    unit: Unit.largoDoMachado,
+    employee: sampleEmployees[2],
+    type: CashClosingType.positive,
+    amount: 31.75,
+    description: 'Ajuste de conferencia',
+    deductFromPayroll: false,
+  ),
+];
+
 MonthlyStatement sampleStatement(Employee employee) {
   return MonthlyStatement(
     employee: employee,

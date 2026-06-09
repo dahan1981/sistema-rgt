@@ -49,6 +49,51 @@ class CashEntry {
   final double amount;
 }
 
+enum CashClosingType {
+  positive('Caixa positivo'),
+  negative('Caixa negativo');
+
+  const CashClosingType(this.label);
+
+  final String label;
+}
+
+class CashClosingEntry {
+  const CashClosingEntry({
+    required this.id,
+    required this.date,
+    required this.unit,
+    required this.employee,
+    required this.type,
+    required this.amount,
+    required this.description,
+    required this.deductFromPayroll,
+  });
+
+  final String id;
+  final DateTime date;
+  final Unit unit;
+  final Employee employee;
+  final CashClosingType type;
+  final double amount;
+  final String description;
+  final bool deductFromPayroll;
+}
+
+class CashClosingSummary {
+  const CashClosingSummary({
+    required this.positive,
+    required this.negative,
+    required this.payrollDeductions,
+  });
+
+  final double positive;
+  final double negative;
+  final double payrollDeductions;
+
+  double get balance => positive - negative;
+}
+
 class MonthlyStatement {
   const MonthlyStatement({
     required this.employee,
