@@ -49,7 +49,7 @@ void main() {
     expect(find.text('Filtro de banca'), findsOneWidget);
     expect(find.text('Filtro de colaborador'), findsOneWidget);
     expect(find.text('Passivo global'), findsOneWidget);
-    expect(find.text('Todos os colaboladores'), findsWidgets);
+    expect(find.text('Todos os colaboradores'), findsWidgets);
   });
 
   testWidgets('opens cash closing page', (tester) async {
@@ -59,7 +59,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Fechamento de caixa'), findsOneWidget);
-    expect(find.text('Caixa positivo no mes'), findsOneWidget);
+    expect(find.text('Caixa positivo no mês'), findsOneWidget);
     expect(find.text('Descontar em folha'), findsOneWidget);
   });
 
@@ -82,7 +82,7 @@ void main() {
     );
 
     expect(find.text('Fechamento de caixa'), findsOneWidget);
-    expect(find.text('Todos os colaboladores'), findsOneWidget);
+    expect(find.text('Todos os colaboradores'), findsOneWidget);
     expect(find.text('Todos'), findsOneWidget);
     expect(find.text('R\$ 116,25'), findsOneWidget);
     expect(find.text('R\$ 42,00'), findsWidgets);
@@ -104,8 +104,8 @@ void main() {
       ),
     );
 
-    expect(find.text('8 colaborador(es) em todos os colaboladores'),
-        findsOneWidget);
+    expect(
+        find.text('8 colaboradores em todos os colaboradores'), findsOneWidget);
     expect(find.text('Ana Carolina Martins'), findsWidgets);
     await tester.scrollUntilVisible(
       find.text('Gabriel Souza'),
@@ -137,7 +137,7 @@ void main() {
     await tester.tap(find.text('Mensal'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Pontuacao de incentivo'), findsOneWidget);
+    expect(find.text('Pontuação de incentivo'), findsOneWidget);
     expect(find.text('Valor do incentivo'), findsOneWidget);
     expect(find.text('R\$ 100,00'), findsWidgets);
   });
@@ -145,15 +145,15 @@ void main() {
   testWidgets('opens report options with cash closing choices', (tester) async {
     await tester.pumpWidget(const SistemaRgtApp());
 
-    await tester.tap(find.byTooltip('Gerar relatorio'));
+    await tester.tap(find.byTooltip('Gerar relatório'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Gerar relatorio'), findsOneWidget);
-    expect(find.text('Todos os colaboladores'), findsWidgets);
+    expect(find.text('Gerar relatório'), findsOneWidget);
+    expect(find.text('Todos os colaboradores'), findsWidgets);
     expect(find.text('Ana Carolina Martins'), findsWidgets);
     expect(find.text('Bruno Silva Rocha'), findsWidgets);
     expect(find.text('Fechamento de caixa geral'), findsOneWidget);
     expect(find.text('Fechamento de caixa por colaborador'), findsOneWidget);
-    expect(find.text('Preparar relatorio'), findsOneWidget);
+    expect(find.text('Preparar relatório'), findsOneWidget);
   });
 }

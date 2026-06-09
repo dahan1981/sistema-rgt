@@ -29,7 +29,7 @@ final sampleCashClosings = [
     employee: sampleEmployees[1],
     type: CashClosingType.negative,
     amount: 42.00,
-    description: 'Diferenca no caixa',
+    description: 'Diferença no caixa',
     deductFromPayroll: true,
   ),
   CashClosingEntry(
@@ -39,7 +39,7 @@ final sampleCashClosings = [
     employee: sampleEmployees[2],
     type: CashClosingType.positive,
     amount: 31.75,
-    description: 'Ajuste de conferencia',
+    description: 'Ajuste de conferência',
     deductFromPayroll: false,
   ),
 ];
@@ -70,7 +70,7 @@ MonthlyStatement sampleStatement(Employee employee) {
     negativeCashEntries: [
       CashEntry(
         date: DateTime(2026, 6, 12),
-        description: 'Diferenca caixa',
+        description: 'Diferença de caixa',
         amount: 35,
       ),
     ],

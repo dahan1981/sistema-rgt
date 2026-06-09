@@ -1,6 +1,6 @@
 enum Unit {
-  adm('Administracao'),
-  geral('Todos os colaboladores'),
+  adm('Administração'),
+  geral('Todos os colaboradores'),
   largoDoMachado('LARGO DO MACHADO'),
   laranj('LARANJ'),
   ktt1('KTT1'),
@@ -14,9 +14,9 @@ enum Unit {
 }
 
 enum Incentive {
-  score1('Pontuacao 1', 50),
-  score2('Pontuacao 2', 100),
-  score3('Pontuacao 3', 150);
+  score1('Pontuação 1', 50),
+  score2('Pontuação 2', 100),
+  score3('Pontuação 3', 150);
 
   const Incentive(this.label, this.amount);
 

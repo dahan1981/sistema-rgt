@@ -141,11 +141,15 @@ class _RgtHomePageState extends State<RgtHomePage> {
     }
     if (options.includeEmployeeCashClosing) {
       parts.add(
-        'fechamento por ${options.selectedEmployees.length} colabolador(es)',
+        'fechamento por ${_collaboratorCountLabel(options.selectedEmployees.length)}',
       );
     }
 
-    return 'Relatorio preparado: ${parts.join(', ')}.';
+    return 'Relatório preparado: ${parts.join(', ')}.';
+  }
+
+  String _collaboratorCountLabel(int count) {
+    return count == 1 ? '1 colaborador' : '$count colaboradores';
   }
 
   @override
@@ -292,14 +296,14 @@ class AppHeader extends StatelessWidget {
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
                 ),
                 Text(
-                  'Demonstrativo mensal de entradas e saidas',
+                  'Demonstrativo mensal de entradas e saídas',
                   style: TextStyle(color: Color(0xFF5E6762)),
                 ),
               ],
             ),
           ),
           IconButton(
-            tooltip: 'Gerar relatorio',
+            tooltip: 'Gerar relatório',
             onPressed: onReportRequested,
             icon: const Icon(Icons.picture_as_pdf_outlined),
           ),
@@ -404,7 +408,7 @@ class _ReportOptionsDialogState extends State<ReportOptionsDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Gerar relatorio'),
+      title: const Text('Gerar relatório'),
       content: SizedBox(
         width: 460,
         child: SingleChildScrollView(
@@ -414,7 +418,7 @@ class _ReportOptionsDialogState extends State<ReportOptionsDialog> {
             children: [
               Text(
                 widget.selectedUnit == Unit.geral
-                    ? 'Todos os colaboladores'
+                    ? 'Todos os colaboradores'
                     : '${widget.selectedUnit.label} - ${widget.selectedEmployee.name}',
                 style: const TextStyle(color: Color(0xFF5E6762)),
               ),
@@ -438,8 +442,8 @@ class _ReportOptionsDialogState extends State<ReportOptionsDialog> {
               ReportCheckbox(
                 title: 'Fechamento de caixa por colaborador',
                 subtitle: widget.selectedUnit == Unit.geral
-                    ? 'Escolha os colaboladores que entrarao no relatorio.'
-                    : 'Lancamentos dos colaboladores selecionados.',
+                    ? 'Escolha os colaboradores que entrarão no relatório.'
+                    : 'Lançamentos dos colaboradores selecionados.',
                 value: _includeEmployeeCashClosing,
                 onChanged: (value) {
                   setState(() => _includeEmployeeCashClosing = value);
@@ -473,7 +477,7 @@ class _ReportOptionsDialogState extends State<ReportOptionsDialog> {
         FilledButton.icon(
           onPressed: _hasSelection ? _submit : null,
           icon: const Icon(Icons.picture_as_pdf_outlined),
-          label: const Text('Preparar relatorio'),
+          label: const Text('Preparar relatório'),
         ),
       ],
     );
@@ -835,7 +839,7 @@ class DashboardHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = const PageTitle(
       title: 'Painel global',
-      subtitle: 'Visao consolidada por banca e metricas do mes.',
+      subtitle: 'Visão consolidada por banca e métricas do mês.',
     );
     final filter = SizedBox(
       width: 280,
@@ -849,7 +853,7 @@ class DashboardHeader extends StatelessWidget {
         items: [
           const DropdownMenuItem<Unit?>(
             value: null,
-            child: Text('Todos os colaboladores'),
+            child: Text('Todos os colaboradores'),
           ),
           ...Unit.values.where((unit) => unit != Unit.geral).map(
                 (unit) => DropdownMenuItem<Unit?>(
@@ -880,7 +884,7 @@ class DashboardHeader extends StatelessWidget {
         items: [
           const DropdownMenuItem<Employee?>(
             value: null,
-            child: Text('Todos os colaboladores'),
+            child: Text('Todos os colaboradores'),
           ),
           ...employeeOptions.map(
             (employee) => DropdownMenuItem<Employee?>(
@@ -1087,8 +1091,11 @@ class EmployeesPage extends StatelessWidget {
             return employee.unit == selectedUnit;
           }).toList();
     final filterLabel = selectedUnit == Unit.geral
-        ? 'todos os colaboladores'
+        ? 'todos os colaboradores'
         : selectedUnit.label;
+    final countLabel = filteredEmployees.length == 1
+        ? '1 colaborador'
+        : '${filteredEmployees.length} colaboradores';
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -1149,7 +1156,7 @@ class EmployeesPage extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         Text(
-          '${filteredEmployees.length} colaborador(es) em $filterLabel',
+          '$countLabel em $filterLabel',
           style: const TextStyle(
             color: Color(0xFF5E6762),
             fontWeight: FontWeight.w600,
@@ -1257,11 +1264,11 @@ class StatementPage extends StatelessWidget {
         ResponsiveGrid(
           children: [
             SectionPanel(
-              title: 'Previsao e descontos',
+              title: 'Previsão e descontos',
               child: Column(
                 children: [
                   MoneyField(
-                    label: 'Previsao de Lancamento',
+                    label: 'Previsão de lançamento',
                     value: statement.salaryForecast,
                     onChanged: (value) => onChanged(
                       statement.copyWith(salaryForecast: value),
@@ -1282,7 +1289,7 @@ class StatementPage extends StatelessWidget {
                     ),
                   ),
                   SwitchRow(
-                    label: 'Lancar faltas como despesa',
+                    label: 'Lançar faltas como despesa',
                     value: statement.discountAbsencesAsExpense,
                     onChanged: (value) => onChanged(
                       statement.copyWith(discountAbsencesAsExpense: value),
@@ -1297,7 +1304,7 @@ class StatementPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   NumberStepper(
-                    label: 'Pontuacao de assiduidade',
+                    label: 'Pontuação de assiduidade',
                     value: statement.attendanceScore,
                     onChanged: (value) => onChanged(
                       statement.copyWith(attendanceScore: value),
@@ -1308,7 +1315,7 @@ class StatementPage extends StatelessWidget {
                     value: statement.incentive,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
-                      labelText: 'Pontuacao de incentivo',
+                      labelText: 'Pontuação de incentivo',
                     ),
                     items: Incentive.values
                         .map(
@@ -1331,9 +1338,9 @@ class StatementPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   RevenueToggleField(
-                    label: 'Domingo compensatorio',
+                    label: 'Domingo compensatório',
                     value: statement.sundayCompensation,
-                    enabledLabel: 'Lancar domingo em receita',
+                    enabledLabel: 'Lançar domingo em receita',
                     enabled: statement.launchSundayAsRevenue,
                     onChanged: (value) => onChanged(
                       statement.copyWith(sundayCompensation: value),
@@ -1357,28 +1364,28 @@ class StatementPage extends StatelessWidget {
                     ),
                   ),
                   SwitchRow(
-                    label: 'Lancar dobra em receita',
+                    label: 'Lançar dobra em receita',
                     value: statement.launchDoubleShiftAsRevenue,
                     onChanged: (value) => onChanged(
                       statement.copyWith(launchDoubleShiftAsRevenue: value),
                     ),
                   ),
                   MoneyField(
-                    label: 'Bonificacao de balanco',
+                    label: 'Bonificação de balanço',
                     value: statement.balanceBonus,
                     onChanged: (value) => onChanged(
                       statement.copyWith(balanceBonus: value),
                     ),
                   ),
                   SwitchRow(
-                    label: 'Lancar bonificacao em receita',
+                    label: 'Lançar bonificação em receita',
                     value: statement.launchBalanceBonusAsRevenue,
                     onChanged: (value) => onChanged(
                       statement.copyWith(launchBalanceBonusAsRevenue: value),
                     ),
                   ),
                   SwitchRow(
-                    label: 'Lancar caixa negativo como despesa',
+                    label: 'Lançar caixa negativo como despesa',
                     value: statement.launchNegativeCashAsExpense,
                     onChanged: (value) => onChanged(
                       statement.copyWith(launchNegativeCashAsExpense: value),
@@ -1552,23 +1559,23 @@ class _CashClosingPageState extends State<CashClosingPage> {
       children: [
         const PageTitle(
           title: 'Fechamento de caixa',
-          subtitle: 'Lancamentos por data, unidade e colaborador.',
+          subtitle: 'Lançamentos por data, unidade e colaborador.',
         ),
         const SizedBox(height: 16),
         ResponsiveGrid(
           children: [
             MetricCard(
-              title: 'Caixa positivo no mes',
+              title: 'Caixa positivo no mês',
               value: formatCurrency(summary.positive),
               icon: Icons.add_card_outlined,
             ),
             MetricCard(
-              title: 'Caixa negativo no mes',
+              title: 'Caixa negativo no mês',
               value: formatCurrency(summary.negative),
               icon: Icons.credit_card_off_outlined,
             ),
             MetricCard(
-              title: 'Saldo ate hoje',
+              title: 'Saldo até hoje',
               value: formatCurrency(summary.balance),
               icon: Icons.account_balance_outlined,
             ),
@@ -1583,7 +1590,7 @@ class _CashClosingPageState extends State<CashClosingPage> {
         ResponsiveGrid(
           children: [
             SectionPanel(
-              title: 'Novo lancamento',
+              title: 'Novo lançamento',
               child: Column(
                 children: [
                   DropdownButtonFormField<Unit>(
@@ -1666,7 +1673,7 @@ class _CashClosingPageState extends State<CashClosingPage> {
                     controller: _descriptionController,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
-                      labelText: 'Descricao',
+                      labelText: 'Descrição',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -1695,16 +1702,16 @@ class _CashClosingPageState extends State<CashClosingPage> {
                     child: FilledButton.icon(
                       onPressed: canSubmit ? _submit : null,
                       icon: const Icon(Icons.save_outlined),
-                      label: const Text('Lancar caixa'),
+                      label: const Text('Lançar caixa'),
                     ),
                   ),
                 ],
               ),
             ),
             SectionPanel(
-              title: 'Lancamentos do mes ate hoje',
+              title: 'Lançamentos do mês até hoje',
               child: entries.isEmpty
-                  ? const Text('Nenhum lancamento neste filtro.')
+                  ? const Text('Nenhum lançamento neste filtro.')
                   : Column(
                       children: [
                         for (final entry in entries)

@@ -1,5 +1,5 @@
 name: sistema_rgt
-description: Aplicativo RGT para demonstrativo mensal de entradas e saidas financeiras de colaboradores.
+description: Aplicativo RGT para demonstrativo mensal de entradas e saídas financeiras de colaboradores.
 publish_to: "none"
 version: 0.1.0+1
 
