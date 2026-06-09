@@ -1436,6 +1436,10 @@ class _CashClosingPageState extends State<CashClosingPage> {
   }
 
   List<Employee> get _filteredEmployees {
+    if (widget.selectedUnit == Unit.geral) {
+      return widget.employees;
+    }
+
     return widget.employees.where((employee) {
       return employee.unit == widget.selectedUnit;
     }).toList();
@@ -1447,6 +1451,10 @@ class _CashClosingPageState extends State<CashClosingPage> {
       final sameMonth =
           entry.date.year == now.year && entry.date.month == now.month;
       final untilToday = !entry.date.isAfter(now);
+      if (widget.selectedUnit == Unit.geral) {
+        return sameMonth && untilToday;
+      }
+
       return sameMonth &&
           untilToday &&
           entry.unit == widget.selectedUnit &&
@@ -1455,10 +1463,33 @@ class _CashClosingPageState extends State<CashClosingPage> {
   }
 
   CashClosingSummary get _summary {
-    return const RgtCalculator().calculateCashClosingSummary(
-      widget.entries,
-      unit: widget.selectedUnit,
-      employee: widget.selectedEmployee,
+    if (widget.selectedUnit != Unit.geral) {
+      return const RgtCalculator().calculateCashClosingSummary(
+        widget.entries,
+        unit: widget.selectedUnit,
+        employee: widget.selectedEmployee,
+      );
+    }
+
+    var positive = 0.0;
+    var negative = 0.0;
+    var payrollDeductions = 0.0;
+
+    for (final entry in _visibleEntries) {
+      if (entry.type == CashClosingType.positive) {
+        positive += entry.amount;
+      } else {
+        negative += entry.amount;
+        if (entry.deductFromPayroll) {
+          payrollDeductions += entry.amount;
+        }
+      }
+    }
+
+    return CashClosingSummary(
+      positive: positive,
+      negative: negative,
+      payrollDeductions: payrollDeductions,
     );
   }
 
@@ -1481,12 +1512,13 @@ class _CashClosingPageState extends State<CashClosingPage> {
     }
 
     final description = _descriptionController.text.trim();
+    final entryEmployee = widget.selectedEmployee;
     widget.onEntryAdded(
       CashClosingEntry(
         id: 'cx-${DateTime.now().microsecondsSinceEpoch}',
         date: _date,
-        unit: widget.selectedUnit,
-        employee: widget.selectedEmployee,
+        unit: entryEmployee.unit,
+        employee: entryEmployee,
         type: _type,
         amount: _amount,
         description: description.isEmpty ? 'Fechamento de caixa' : description,
@@ -1571,7 +1603,7 @@ class _CashClosingPageState extends State<CashClosingPage> {
                   DropdownButtonFormField<Employee>(
                     value: employees.contains(widget.selectedEmployee)
                         ? widget.selectedEmployee
-                        : employees.first,
+                        : null,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       labelText: 'Colaborador',
