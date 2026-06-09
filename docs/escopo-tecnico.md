@@ -42,6 +42,11 @@ O RH deve conseguir lancar caixas positivos e negativos informando:
 
 A pagina de fechamento mostra o total mensal ate a data vigente, respeitando o filtro atual de unidade e colaborador.
 
+Cada fechamento deve refletir no resumo financeiro do colaborador como
+`Fechamento de caixa parcial`. Caixas positivos entram como receita do periodo.
+Caixas negativos entram no saldo parcial; quando marcados para desconto em folha,
+tambem entram como despesa do demonstrativo mensal.
+
 ## Integracao Supabase futura
 
 As regras sensiveis devem migrar para SQL ou Edge Functions quando o Supabase for integrado. O app deve continuar mostrando o calculo em tempo real, mas o valor oficial salvo e auditado deve vir do backend.

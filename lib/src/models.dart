@@ -141,6 +141,8 @@ class FinancialSummary {
     required this.absenceDiscount,
     required this.positiveCash,
     required this.negativeCash,
+    required this.partialCashClosing,
+    required this.payrollCashDiscount,
     required this.finalLiability,
   });
 
@@ -149,5 +151,7 @@ class FinancialSummary {
   final double absenceDiscount;
   final double positiveCash;
   final double negativeCash;
+  final double partialCashClosing;
+  final double payrollCashDiscount;
   final double finalLiability;
 }

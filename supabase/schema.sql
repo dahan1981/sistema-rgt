@@ -97,6 +97,8 @@ returns table (
   absence_discount numeric,
   positive_cash numeric,
   negative_cash numeric,
+  partial_cash_closing numeric,
+  payroll_cash_discount numeric,
   final_liability numeric
 )
 language sql
@@ -113,6 +115,21 @@ as $$
       coalesce(sum(amount) filter (where kind = 'negative'), 0) as negative_cash
     from public.cash_entries
     where monthly_statement_id = statement_id
+  ),
+  closings as (
+    select
+      coalesce(sum(amount) filter (where cc.kind = 'positive'), 0) as closing_positive,
+      coalesce(sum(amount) filter (where cc.kind = 'negative'), 0) as closing_negative,
+      coalesce(sum(amount) filter (
+        where cc.kind = 'negative' and cc.deduct_from_payroll
+      ), 0) as payroll_cash_discount
+    from public.cash_closings cc
+    cross join base b
+    join public.employees e on e.id = b.employee_id
+    where cc.employee_id = b.employee_id
+      and cc.unit_id = e.unit_id
+      and cc.entry_date >= date_trunc('month', current_date)::date
+      and cc.entry_date <= current_date
   )
   select
     (
@@ -120,29 +137,36 @@ as $$
       case when b.launch_sunday_as_revenue then b.sunday_compensation else 0 end +
       case when b.launch_double_shift_as_revenue then b.double_shift else 0 end +
       case when b.launch_balance_bonus_as_revenue then b.balance_bonus else 0 end +
-      c.positive_cash
+      c.positive_cash +
+      cl.closing_positive
     ) as revenues,
     (
       b.vouchers +
       case when b.discount_absences_as_expense then b.salary_forecast / 30 * b.absences else 0 end +
-      case when b.launch_negative_cash_as_expense then c.negative_cash else 0 end
+      case when b.launch_negative_cash_as_expense then c.negative_cash else 0 end +
+      cl.payroll_cash_discount
     ) as expenses,
     case when b.discount_absences_as_expense then b.salary_forecast / 30 * b.absences else 0 end as absence_discount,
     c.positive_cash,
     c.negative_cash,
+    cl.closing_positive - cl.closing_negative as partial_cash_closing,
+    cl.payroll_cash_discount,
     (
       b.salary_forecast +
       b.incentive_amount +
       case when b.launch_sunday_as_revenue then b.sunday_compensation else 0 end +
       case when b.launch_double_shift_as_revenue then b.double_shift else 0 end +
       case when b.launch_balance_bonus_as_revenue then b.balance_bonus else 0 end +
+      cl.closing_positive +
       c.positive_cash -
       b.vouchers -
       case when b.discount_absences_as_expense then b.salary_forecast / 30 * b.absences else 0 end -
-      case when b.launch_negative_cash_as_expense then c.negative_cash else 0 end
+      case when b.launch_negative_cash_as_expense then c.negative_cash else 0 end -
+      cl.payroll_cash_discount
     ) as final_liability
   from base b
-  cross join cash c;
+  cross join cash c
+  cross join closings cl;
 $$;
 
 insert into public.units (id, label)

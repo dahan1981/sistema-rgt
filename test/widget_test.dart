@@ -1,8 +1,45 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:sistema_rgt/src/calculator.dart';
 import 'package:sistema_rgt/src/app.dart';
+import 'package:sistema_rgt/src/models.dart';
+import 'package:sistema_rgt/src/sample_data.dart';
 
 void main() {
+  test('cash closings feed financial summary', () {
+    final employee = sampleEmployees.first;
+    final statement = sampleStatement(employee);
+    final summary = const RgtCalculator().calculate(
+      statement,
+      today: DateTime(2026, 6, 8),
+      cashClosings: [
+        CashClosingEntry(
+          id: 'positive',
+          date: DateTime(2026, 6, 8),
+          unit: employee.unit,
+          employee: employee,
+          type: CashClosingType.positive,
+          amount: 200,
+          description: 'Sobra',
+          deductFromPayroll: false,
+        ),
+        CashClosingEntry(
+          id: 'negative',
+          date: DateTime(2026, 6, 8),
+          unit: employee.unit,
+          employee: employee,
+          type: CashClosingType.negative,
+          amount: 600,
+          description: 'Falta',
+          deductFromPayroll: true,
+        ),
+      ],
+    );
+
+    expect(summary.partialCashClosing, -400);
+    expect(summary.payrollCashDiscount, 600);
+  });
+
   testWidgets('renders RGT dashboard shell', (tester) async {
     await tester.pumpWidget(const SistemaRgtApp());
 

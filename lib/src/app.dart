@@ -78,7 +78,10 @@ class _RgtHomePageState extends State<RgtHomePage> {
   @override
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.sizeOf(context).width >= 900;
-    final summary = _calculator.calculate(_statement);
+    final summary = _calculator.calculate(
+      _statement,
+      cashClosings: _cashClosings,
+    );
 
     final pages = [
       DashboardPage(statement: _statement, summary: summary),
@@ -104,6 +107,7 @@ class _RgtHomePageState extends State<RgtHomePage> {
           setState(() {
             _selectedEmployee = employee;
             _selectedUnit = employee.unit;
+            _statement = sampleStatement(employee);
           });
         },
         onEntryAdded: _addCashClosing,
@@ -753,25 +757,10 @@ class _CashClosingPageState extends State<CashClosingPage> {
   }
 
   CashClosingSummary get _summary {
-    var positive = 0.0;
-    var negative = 0.0;
-    var payrollDeductions = 0.0;
-
-    for (final entry in _visibleEntries) {
-      if (entry.type == CashClosingType.positive) {
-        positive += entry.amount;
-      } else {
-        negative += entry.amount;
-        if (entry.deductFromPayroll) {
-          payrollDeductions += entry.amount;
-        }
-      }
-    }
-
-    return CashClosingSummary(
-      positive: positive,
-      negative: negative,
-      payrollDeductions: payrollDeductions,
+    return const RgtCalculator().calculateCashClosingSummary(
+      widget.entries,
+      unit: widget.selectedUnit,
+      employee: widget.selectedEmployee,
     );
   }
 
@@ -1323,6 +1312,15 @@ class SummaryTable extends StatelessWidget {
             label: 'Desconto por faltas', value: summary.absenceDiscount),
         SummaryRow(label: 'Caixa positivo', value: summary.positiveCash),
         SummaryRow(label: 'Caixa negativo', value: summary.negativeCash),
+        SummaryRow(
+          label: 'Fechamento de caixa parcial',
+          value: summary.partialCashClosing,
+        ),
+        if (summary.payrollCashDiscount > 0)
+          SummaryRow(
+            label: 'Desconto em folha por caixa',
+            value: summary.payrollCashDiscount,
+          ),
         const Divider(height: 28),
         SummaryRow(
           label: 'Passivo circulante final',
