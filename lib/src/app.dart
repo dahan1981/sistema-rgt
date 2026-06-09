@@ -51,6 +51,9 @@ class _RgtHomePageState extends State<RgtHomePage> {
       _statement = sampleStatement(employee);
       _selectedIndex = 2;
     });
+    _showTabFeedback(
+      'Demonstrativo mensal aberto para ${employee.name}.',
+    );
   }
 
   void _selectUnit(Unit unit) {
@@ -78,6 +81,28 @@ class _RgtHomePageState extends State<RgtHomePage> {
   void _addCashClosing(CashClosingEntry entry) {
     setState(() {
       _cashClosings.insert(0, entry);
+    });
+  }
+
+  void _setSelectedIndex(int index) {
+    setState(() => _selectedIndex = index);
+  }
+
+  void _showTabFeedback(String message) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(message),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
     });
   }
 
@@ -175,14 +200,19 @@ class _RgtHomePageState extends State<RgtHomePage> {
           if (isDesktop)
             RgtSideNav(
               selectedIndex: _selectedIndex,
-              onChanged: (index) => setState(() => _selectedIndex = index),
+              onChanged: _setSelectedIndex,
             ),
           Expanded(
             child: SafeArea(
               child: Column(
                 children: [
                   AppHeader(onReportRequested: _openReportOptions),
-                  Expanded(child: pages[_selectedIndex]),
+                  Expanded(
+                    child: PageTransitionHost(
+                      selectedIndex: _selectedIndex,
+                      child: pages[_selectedIndex],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -193,9 +223,7 @@ class _RgtHomePageState extends State<RgtHomePage> {
           ? null
           : NavigationBar(
               selectedIndex: _selectedIndex,
-              onDestinationSelected: (index) {
-                setState(() => _selectedIndex = index);
-              },
+              onDestinationSelected: _setSelectedIndex,
               destinations: const [
                 NavigationDestination(
                   icon: Icon(Icons.bar_chart_outlined),
@@ -276,6 +304,41 @@ class AppHeader extends StatelessWidget {
             icon: const Icon(Icons.picture_as_pdf_outlined),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class PageTransitionHost extends StatelessWidget {
+  const PageTransitionHost({
+    required this.selectedIndex,
+    required this.child,
+    super.key,
+  });
+
+  final int selectedIndex;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        final offsetAnimation = Tween<Offset>(
+          begin: const Offset(0.03, 0),
+          end: Offset.zero,
+        ).animate(animation);
+
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(position: offsetAnimation, child: child),
+        );
+      },
+      child: KeyedSubtree(
+        key: ValueKey<int>(selectedIndex),
+        child: child,
       ),
     );
   }
@@ -1148,7 +1211,18 @@ class EmployeeRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: const [
+                    Icon(Icons.receipt_long_outlined),
+                    SizedBox(height: 4),
+                    Text(
+                      'Abrir mensal',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF5E6762)),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),

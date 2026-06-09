@@ -90,6 +90,22 @@ void main() {
     expect(find.text('Gabriel Souza'), findsOneWidget);
   });
 
+  testWidgets('selecting collaborator explains monthly navigation',
+      (tester) async {
+    await tester.pumpWidget(const SistemaRgtApp());
+
+    await tester.tap(find.text('Equipe'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ana Carolina Martins').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Demonstrativo mensal'), findsOneWidget);
+    expect(
+      find.text('Demonstrativo mensal aberto para Ana Carolina Martins.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('shows incentive score and calculated amount', (tester) async {
     await tester.pumpWidget(const SistemaRgtApp());
 
