@@ -4,7 +4,7 @@ Este documento traduz o PDF de demonstrativo mensal em modulos de aplicativo.
 
 ## Modulos do aplicativo
 
-- Painel global por banca/unidade, com filtro e metricas consolidadas.
+- Painel global por banca/unidade, com filtros de banca e colaborador, e metricas consolidadas.
 - Autenticacao e permissoes por perfil.
 - Cadastro de colaboradores.
 - Vinculo do colaborador com unidade.

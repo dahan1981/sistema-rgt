@@ -495,7 +495,7 @@ class NavButton extends StatelessWidget {
   }
 }
 
-class DashboardPage extends StatelessWidget {
+class DashboardPage extends StatefulWidget {
   const DashboardPage({
     required this.employees,
     required this.cashClosings,
@@ -509,15 +509,30 @@ class DashboardPage extends StatelessWidget {
   final Unit? selectedUnitFilter;
   final ValueChanged<Unit?> onUnitFilterChanged;
 
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  Employee? _selectedGlobalEmployee;
+  final Map<Unit, Employee?> _selectedEmployeesByUnit = {};
+
   List<UnitDashboardSummary> get _unitSummaries {
     final calculator = const RgtCalculator();
-    final units =
-        selectedUnitFilter == null ? Unit.values : [selectedUnitFilter!];
+    final units = widget.selectedUnitFilter == null
+        ? Unit.values
+        : [widget.selectedUnitFilter!];
 
     return units.map((unit) {
-      final unitEmployees = employees.where((employee) {
+      final unitEmployees = widget.employees.where((employee) {
         return employee.unit == unit;
       }).toList();
+      final selectedEmployee = _selectedEmployeesByUnit[unit];
+      final effectiveEmployees = selectedEmployee == null
+          ? unitEmployees
+          : unitEmployees.where((employee) {
+              return employee.id == selectedEmployee.id;
+            }).toList();
 
       var revenues = 0.0;
       var expenses = 0.0;
@@ -525,10 +540,10 @@ class DashboardPage extends StatelessWidget {
       var partialCashClosing = 0.0;
       var payrollCashDiscount = 0.0;
 
-      for (final employee in unitEmployees) {
+      for (final employee in effectiveEmployees) {
         final summary = calculator.calculate(
           sampleStatement(employee),
-          cashClosings: cashClosings,
+          cashClosings: widget.cashClosings,
         );
         revenues += summary.revenues;
         expenses += summary.expenses;
@@ -539,7 +554,8 @@ class DashboardPage extends StatelessWidget {
 
       return UnitDashboardSummary(
         unit: unit,
-        employeeCount: unitEmployees.length,
+        employees: unitEmployees,
+        selectedEmployee: selectedEmployee,
         revenues: revenues,
         expenses: expenses,
         finalLiability: finalLiability,
@@ -552,14 +568,48 @@ class DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final summaries = _unitSummaries;
-    final totals = DashboardTotals.fromSummaries(summaries);
+    final globalSummaries = _selectedGlobalEmployee == null
+        ? summaries
+        : summaries.where((summary) {
+            return summary.unit == _selectedGlobalEmployee!.unit;
+          }).map((summary) {
+            final employee = _selectedGlobalEmployee!;
+            final financialSummary = const RgtCalculator().calculate(
+              sampleStatement(employee),
+              cashClosings: widget.cashClosings,
+            );
+
+            return UnitDashboardSummary(
+              unit: summary.unit,
+              employees: summary.employees,
+              selectedEmployee: employee,
+              revenues: financialSummary.revenues,
+              expenses: financialSummary.expenses,
+              finalLiability: financialSummary.finalLiability,
+              partialCashClosing: financialSummary.partialCashClosing,
+              payrollCashDiscount: financialSummary.payrollCashDiscount,
+            );
+          }).toList();
+    final totals = DashboardTotals.fromSummaries(globalSummaries);
 
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
         DashboardHeader(
-          selectedUnitFilter: selectedUnitFilter,
-          onUnitFilterChanged: onUnitFilterChanged,
+          employees: widget.employees,
+          selectedUnitFilter: widget.selectedUnitFilter,
+          selectedEmployee: _selectedGlobalEmployee,
+          onUnitFilterChanged: (unit) {
+            if (_selectedGlobalEmployee != null &&
+                unit != null &&
+                _selectedGlobalEmployee!.unit != unit) {
+              setState(() => _selectedGlobalEmployee = null);
+            }
+            widget.onUnitFilterChanged(unit);
+          },
+          onEmployeeFilterChanged: (employee) {
+            setState(() => _selectedGlobalEmployee = employee);
+          },
         ),
         const SizedBox(height: 16),
         ResponsiveGrid(
@@ -594,7 +644,14 @@ class DashboardPage extends StatelessWidget {
             runSpacing: 16,
             children: [
               for (final summary in summaries)
-                BancaMetricCard(summary: summary),
+                BancaMetricCard(
+                  summary: summary,
+                  onEmployeeChanged: (employee) {
+                    setState(() {
+                      _selectedEmployeesByUnit[summary.unit] = employee;
+                    });
+                  },
+                ),
             ],
           ),
         ),
@@ -605,13 +662,19 @@ class DashboardPage extends StatelessWidget {
 
 class DashboardHeader extends StatelessWidget {
   const DashboardHeader({
+    required this.employees,
     required this.selectedUnitFilter,
+    required this.selectedEmployee,
     required this.onUnitFilterChanged,
+    required this.onEmployeeFilterChanged,
     super.key,
   });
 
+  final List<Employee> employees;
   final Unit? selectedUnitFilter;
+  final Employee? selectedEmployee;
   final ValueChanged<Unit?> onUnitFilterChanged;
+  final ValueChanged<Employee?> onEmployeeFilterChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -643,6 +706,37 @@ class DashboardHeader extends StatelessWidget {
         onChanged: onUnitFilterChanged,
       ),
     );
+    final employeeOptions = selectedUnitFilter == null
+        ? employees
+        : employees.where((employee) {
+            return employee.unit == selectedUnitFilter;
+          }).toList();
+    final employeeFilter = SizedBox(
+      width: 280,
+      child: DropdownButtonFormField<Employee?>(
+        isExpanded: true,
+        value: employeeOptions.contains(selectedEmployee)
+            ? selectedEmployee
+            : null,
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(),
+          labelText: 'Filtro de colaborador',
+        ),
+        items: [
+          const DropdownMenuItem<Employee?>(
+            value: null,
+            child: Text('Todos os colaboradores'),
+          ),
+          ...employeeOptions.map(
+            (employee) => DropdownMenuItem<Employee?>(
+              value: employee,
+              child: Text(employee.name),
+            ),
+          ),
+        ],
+        onChanged: onEmployeeFilterChanged,
+      ),
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -653,6 +747,8 @@ class DashboardHeader extends StatelessWidget {
               title,
               const SizedBox(height: 12),
               SizedBox(width: double.infinity, child: filter),
+              const SizedBox(height: 12),
+              SizedBox(width: double.infinity, child: employeeFilter),
             ],
           );
         }
@@ -663,6 +759,8 @@ class DashboardHeader extends StatelessWidget {
             Expanded(child: title),
             const SizedBox(width: 16),
             filter,
+            const SizedBox(width: 12),
+            employeeFilter,
           ],
         );
       },
@@ -673,7 +771,8 @@ class DashboardHeader extends StatelessWidget {
 class UnitDashboardSummary {
   const UnitDashboardSummary({
     required this.unit,
-    required this.employeeCount,
+    required this.employees,
+    required this.selectedEmployee,
     required this.revenues,
     required this.expenses,
     required this.finalLiability,
@@ -682,7 +781,8 @@ class UnitDashboardSummary {
   });
 
   final Unit unit;
-  final int employeeCount;
+  final List<Employee> employees;
+  final Employee? selectedEmployee;
   final double revenues;
   final double expenses;
   final double finalLiability;
@@ -720,9 +820,14 @@ class DashboardTotals {
 }
 
 class BancaMetricCard extends StatelessWidget {
-  const BancaMetricCard({required this.summary, super.key});
+  const BancaMetricCard({
+    required this.summary,
+    required this.onEmployeeChanged,
+    super.key,
+  });
 
   final UnitDashboardSummary summary;
+  final ValueChanged<Employee?> onEmployeeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -739,6 +844,7 @@ class BancaMetricCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: Text(
@@ -749,7 +855,32 @@ class BancaMetricCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                Text('${summary.employeeCount} colab.'),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 170,
+                  child: DropdownButtonFormField<Employee?>(
+                    isExpanded: true,
+                    value: summary.selectedEmployee,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Colaborador',
+                      isDense: true,
+                    ),
+                    items: [
+                      const DropdownMenuItem<Employee?>(
+                        value: null,
+                        child: Text('Todos da banca'),
+                      ),
+                      ...summary.employees.map(
+                        (employee) => DropdownMenuItem<Employee?>(
+                          value: employee,
+                          child: Text(employee.name),
+                        ),
+                      ),
+                    ],
+                    onChanged: onEmployeeChanged,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 14),

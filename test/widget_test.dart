@@ -46,8 +46,10 @@ void main() {
     expect(find.text('Sistema de RGT'), findsOneWidget);
     expect(find.text('Painel global'), findsOneWidget);
     expect(find.text('Filtro de banca'), findsOneWidget);
+    expect(find.text('Filtro de colaborador'), findsOneWidget);
     expect(find.text('Passivo global'), findsOneWidget);
     expect(find.text('Todos os funcionarios'), findsOneWidget);
+    expect(find.text('Todos os colaboradores'), findsOneWidget);
   });
 
   testWidgets('opens cash closing page', (tester) async {
