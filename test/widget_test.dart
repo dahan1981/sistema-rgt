@@ -49,8 +49,7 @@ void main() {
     expect(find.text('Filtro de banca'), findsOneWidget);
     expect(find.text('Filtro de colaborador'), findsOneWidget);
     expect(find.text('Passivo global'), findsOneWidget);
-    expect(find.text('Todos os funcionarios'), findsOneWidget);
-    expect(find.text('Todos os colaboradores'), findsOneWidget);
+    expect(find.text('Todos os colaboladores'), findsWidgets);
   });
 
   testWidgets('opens cash closing page', (tester) async {
@@ -80,7 +79,7 @@ void main() {
       ),
     );
 
-    expect(find.text('8 colaborador(es) em todos os funcionarios'),
+    expect(find.text('8 colaborador(es) em todos os colaboladores'),
         findsOneWidget);
     expect(find.text('Ana Carolina Martins'), findsWidgets);
     await tester.scrollUntilVisible(

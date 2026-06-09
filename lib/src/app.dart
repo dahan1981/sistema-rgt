@@ -54,6 +54,11 @@ class _RgtHomePageState extends State<RgtHomePage> {
   }
 
   void _selectUnit(Unit unit) {
+    if (unit == Unit.geral) {
+      setState(() => _selectedUnit = Unit.geral);
+      return;
+    }
+
     final employeesInUnit = sampleEmployees.where((employee) {
       return employee.unit == unit;
     }).toList();
@@ -519,8 +524,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
   List<UnitDashboardSummary> get _unitSummaries {
     final calculator = const RgtCalculator();
+    final unitOptions = Unit.values.where((unit) => unit != Unit.geral);
     final units = widget.selectedUnitFilter == null
-        ? Unit.values
+        ? unitOptions
         : [widget.selectedUnitFilter!];
 
     return units.map((unit) {
@@ -694,14 +700,14 @@ class DashboardHeader extends StatelessWidget {
         items: [
           const DropdownMenuItem<Unit?>(
             value: null,
-            child: Text('Todos os funcionarios'),
+            child: Text('Todos os colaboladores'),
           ),
-          ...Unit.values.map(
-            (unit) => DropdownMenuItem<Unit?>(
-              value: unit,
-              child: Text(unit.label),
-            ),
-          ),
+          ...Unit.values.where((unit) => unit != Unit.geral).map(
+                (unit) => DropdownMenuItem<Unit?>(
+                  value: unit,
+                  child: Text(unit.label),
+                ),
+              ),
         ],
         onChanged: onUnitFilterChanged,
       ),
@@ -725,7 +731,7 @@ class DashboardHeader extends StatelessWidget {
         items: [
           const DropdownMenuItem<Employee?>(
             value: null,
-            child: Text('Todos os colaboradores'),
+            child: Text('Todos os colaboladores'),
           ),
           ...employeeOptions.map(
             (employee) => DropdownMenuItem<Employee?>(
@@ -932,7 +938,7 @@ class EmployeesPage extends StatelessWidget {
             return employee.unit == selectedUnit;
           }).toList();
     final filterLabel = selectedUnit == Unit.geral
-        ? 'todos os funcionarios'
+        ? 'todos os colaboladores'
         : selectedUnit.label;
 
     return ListView(
@@ -1095,7 +1101,7 @@ class StatementPage extends StatelessWidget {
               child: Column(
                 children: [
                   MoneyField(
-                    label: 'Previsao de salario',
+                    label: 'Previsao de Lancamento',
                     value: statement.salaryForecast,
                     onChanged: (value) => onChanged(
                       statement.copyWith(salaryForecast: value),

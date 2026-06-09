@@ -2,7 +2,7 @@ import 'models.dart';
 
 const sampleEmployees = [
   Employee(id: '1', name: 'Ana Carolina Martins', unit: Unit.adm),
-  Employee(id: '2', name: 'Bruno Silva Rocha', unit: Unit.geral),
+  Employee(id: '2', name: 'Bruno Silva Rocha', unit: Unit.adm),
   Employee(id: '3', name: 'Camila Nogueira', unit: Unit.largoDoMachado),
   Employee(id: '4', name: 'Daniela Costa', unit: Unit.laranj),
   Employee(id: '5', name: 'Diego Almeida', unit: Unit.ktt1),
@@ -25,7 +25,7 @@ final sampleCashClosings = [
   CashClosingEntry(
     id: 'cx-2',
     date: DateTime(2026, 6, 5),
-    unit: Unit.geral,
+    unit: Unit.adm,
     employee: sampleEmployees[1],
     type: CashClosingType.negative,
     amount: 42.00,

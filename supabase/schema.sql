@@ -172,7 +172,6 @@ $$;
 insert into public.units (id, label)
 values
   ('adm', 'Administracao'),
-  ('geral', 'GERAL'),
   ('largo_do_machado', 'LARGO DO MACHADO'),
   ('laranj', 'LARANJ'),
   ('ktt1', 'KTT1'),
