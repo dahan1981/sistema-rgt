@@ -108,6 +108,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Gerar relatorio'), findsOneWidget);
+    expect(find.text('Todos os colaboladores'), findsWidgets);
+    expect(find.text('Ana Carolina Martins'), findsWidgets);
+    expect(find.text('Bruno Silva Rocha'), findsWidgets);
     expect(find.text('Fechamento de caixa geral'), findsOneWidget);
     expect(find.text('Fechamento de caixa por colaborador'), findsOneWidget);
     expect(find.text('Preparar relatorio'), findsOneWidget);

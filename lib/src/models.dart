@@ -98,11 +98,13 @@ class ReportOptions {
     required this.includeFinancialStatement,
     required this.includeGeneralCashClosing,
     required this.includeEmployeeCashClosing,
+    required this.selectedEmployees,
   });
 
   final bool includeFinancialStatement;
   final bool includeGeneralCashClosing;
   final bool includeEmployeeCashClosing;
+  final List<Employee> selectedEmployees;
 
   bool get hasSelection =>
       includeFinancialStatement ||

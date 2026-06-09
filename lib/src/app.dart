@@ -86,6 +86,7 @@ class _RgtHomePageState extends State<RgtHomePage> {
       context: context,
       builder: (context) {
         return ReportOptionsDialog(
+          employees: sampleEmployees,
           selectedEmployee: _selectedEmployee,
           selectedUnit: _selectedUnit,
         );
@@ -114,7 +115,9 @@ class _RgtHomePageState extends State<RgtHomePage> {
       parts.add('fechamento de caixa geral');
     }
     if (options.includeEmployeeCashClosing) {
-      parts.add('fechamento por colaborador');
+      parts.add(
+        'fechamento por ${options.selectedEmployees.length} colabolador(es)',
+      );
     }
 
     return 'Relatorio preparado: ${parts.join(', ')}.';
@@ -280,11 +283,13 @@ class AppHeader extends StatelessWidget {
 
 class ReportOptionsDialog extends StatefulWidget {
   const ReportOptionsDialog({
+    required this.employees,
     required this.selectedEmployee,
     required this.selectedUnit,
     super.key,
   });
 
+  final List<Employee> employees;
   final Employee selectedEmployee;
   final Unit selectedUnit;
 
@@ -296,11 +301,30 @@ class _ReportOptionsDialogState extends State<ReportOptionsDialog> {
   var _includeFinancialStatement = true;
   var _includeGeneralCashClosing = true;
   var _includeEmployeeCashClosing = true;
+  late final Set<String> _selectedEmployeeIds = {
+    if (widget.selectedUnit != Unit.geral) widget.selectedEmployee.id,
+  };
 
   bool get _hasSelection {
     return _includeFinancialStatement ||
         _includeGeneralCashClosing ||
-        _includeEmployeeCashClosing;
+        (_includeEmployeeCashClosing && _selectedEmployees.isNotEmpty);
+  }
+
+  List<Employee> get _employeeOptions {
+    if (widget.selectedUnit == Unit.geral) {
+      return widget.employees;
+    }
+
+    return widget.employees.where((employee) {
+      return employee.unit == widget.selectedUnit;
+    }).toList();
+  }
+
+  List<Employee> get _selectedEmployees {
+    return _employeeOptions.where((employee) {
+      return _selectedEmployeeIds.contains(employee.id);
+    }).toList();
   }
 
   void _submit() {
@@ -309,6 +333,7 @@ class _ReportOptionsDialogState extends State<ReportOptionsDialog> {
         includeFinancialStatement: _includeFinancialStatement,
         includeGeneralCashClosing: _includeGeneralCashClosing,
         includeEmployeeCashClosing: _includeEmployeeCashClosing,
+        selectedEmployees: _selectedEmployees,
       ),
     );
   }
@@ -319,40 +344,62 @@ class _ReportOptionsDialogState extends State<ReportOptionsDialog> {
       title: const Text('Gerar relatorio'),
       content: SizedBox(
         width: 460,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${widget.selectedUnit.label} - ${widget.selectedEmployee.name}',
-              style: const TextStyle(color: Color(0xFF5E6762)),
-            ),
-            const SizedBox(height: 16),
-            ReportCheckbox(
-              title: 'Demonstrativo mensal',
-              subtitle: 'Resumo financeiro do colaborador selecionado.',
-              value: _includeFinancialStatement,
-              onChanged: (value) {
-                setState(() => _includeFinancialStatement = value);
-              },
-            ),
-            ReportCheckbox(
-              title: 'Fechamento de caixa geral',
-              subtitle: 'Consolidado mensal por todas as unidades.',
-              value: _includeGeneralCashClosing,
-              onChanged: (value) {
-                setState(() => _includeGeneralCashClosing = value);
-              },
-            ),
-            ReportCheckbox(
-              title: 'Fechamento de caixa por colaborador',
-              subtitle: 'Lancamentos do colaborador atualmente selecionado.',
-              value: _includeEmployeeCashClosing,
-              onChanged: (value) {
-                setState(() => _includeEmployeeCashClosing = value);
-              },
-            ),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.selectedUnit == Unit.geral
+                    ? 'Todos os colaboladores'
+                    : '${widget.selectedUnit.label} - ${widget.selectedEmployee.name}',
+                style: const TextStyle(color: Color(0xFF5E6762)),
+              ),
+              const SizedBox(height: 16),
+              ReportCheckbox(
+                title: 'Demonstrativo mensal',
+                subtitle: 'Resumo financeiro do colaborador selecionado.',
+                value: _includeFinancialStatement,
+                onChanged: (value) {
+                  setState(() => _includeFinancialStatement = value);
+                },
+              ),
+              ReportCheckbox(
+                title: 'Fechamento de caixa geral',
+                subtitle: 'Consolidado mensal por todas as unidades.',
+                value: _includeGeneralCashClosing,
+                onChanged: (value) {
+                  setState(() => _includeGeneralCashClosing = value);
+                },
+              ),
+              ReportCheckbox(
+                title: 'Fechamento de caixa por colaborador',
+                subtitle: widget.selectedUnit == Unit.geral
+                    ? 'Escolha os colaboladores que entrarao no relatorio.'
+                    : 'Lancamentos dos colaboladores selecionados.',
+                value: _includeEmployeeCashClosing,
+                onChanged: (value) {
+                  setState(() => _includeEmployeeCashClosing = value);
+                },
+              ),
+              if (_includeEmployeeCashClosing) ...[
+                const SizedBox(height: 8),
+                ReportEmployeeSelection(
+                  employees: _employeeOptions,
+                  selectedEmployeeIds: _selectedEmployeeIds,
+                  onChanged: (employee, selected) {
+                    setState(() {
+                      if (selected) {
+                        _selectedEmployeeIds.add(employee.id);
+                      } else {
+                        _selectedEmployeeIds.remove(employee.id);
+                      }
+                    });
+                  },
+                ),
+              ],
+            ],
+          ),
         ),
       ),
       actions: [
@@ -393,6 +440,45 @@ class ReportCheckbox extends StatelessWidget {
       value: value,
       onChanged: (value) => onChanged(value ?? false),
       controlAffinity: ListTileControlAffinity.leading,
+    );
+  }
+}
+
+class ReportEmployeeSelection extends StatelessWidget {
+  const ReportEmployeeSelection({
+    required this.employees,
+    required this.selectedEmployeeIds,
+    required this.onChanged,
+    super.key,
+  });
+
+  final List<Employee> employees;
+  final Set<String> selectedEmployeeIds;
+  final void Function(Employee employee, bool selected) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 220),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFE1E5DF)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          for (final employee in employees)
+            CheckboxListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+              title: Text(employee.name),
+              subtitle: Text(employee.unit.label),
+              value: selectedEmployeeIds.contains(employee.id),
+              onChanged: (value) => onChanged(employee, value ?? false),
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
+        ],
+      ),
     );
   }
 }
