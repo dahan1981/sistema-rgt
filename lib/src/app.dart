@@ -38,6 +38,7 @@ class _RgtHomePageState extends State<RgtHomePage> {
   var _selectedIndex = 0;
   var _selectedEmployee = sampleEmployees.first;
   var _selectedUnit = sampleEmployees.first.unit;
+  Unit? _dashboardUnitFilter;
   late final List<CashClosingEntry> _cashClosings = [
     ...sampleCashClosings,
   ];
@@ -123,7 +124,14 @@ class _RgtHomePageState extends State<RgtHomePage> {
     );
 
     final pages = [
-      DashboardPage(statement: _statement, summary: summary),
+      DashboardPage(
+        employees: sampleEmployees,
+        cashClosings: _cashClosings,
+        selectedUnitFilter: _dashboardUnitFilter,
+        onUnitFilterChanged: (unit) {
+          setState(() => _dashboardUnitFilter = unit);
+        },
+      ),
       EmployeesPage(
         employees: sampleEmployees,
         selectedUnit: _selectedUnit,
@@ -489,64 +497,282 @@ class NavButton extends StatelessWidget {
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({
-    required this.statement,
-    required this.summary,
+    required this.employees,
+    required this.cashClosings,
+    required this.selectedUnitFilter,
+    required this.onUnitFilterChanged,
     super.key,
   });
 
-  final MonthlyStatement statement;
-  final FinancialSummary summary;
+  final List<Employee> employees;
+  final List<CashClosingEntry> cashClosings;
+  final Unit? selectedUnitFilter;
+  final ValueChanged<Unit?> onUnitFilterChanged;
+
+  List<UnitDashboardSummary> get _unitSummaries {
+    final calculator = const RgtCalculator();
+    final units =
+        selectedUnitFilter == null ? Unit.values : [selectedUnitFilter!];
+
+    return units.map((unit) {
+      final unitEmployees = employees.where((employee) {
+        return employee.unit == unit;
+      }).toList();
+
+      var revenues = 0.0;
+      var expenses = 0.0;
+      var finalLiability = 0.0;
+      var partialCashClosing = 0.0;
+      var payrollCashDiscount = 0.0;
+
+      for (final employee in unitEmployees) {
+        final summary = calculator.calculate(
+          sampleStatement(employee),
+          cashClosings: cashClosings,
+        );
+        revenues += summary.revenues;
+        expenses += summary.expenses;
+        finalLiability += summary.finalLiability;
+        partialCashClosing += summary.partialCashClosing;
+        payrollCashDiscount += summary.payrollCashDiscount;
+      }
+
+      return UnitDashboardSummary(
+        unit: unit,
+        employeeCount: unitEmployees.length,
+        revenues: revenues,
+        expenses: expenses,
+        finalLiability: finalLiability,
+        partialCashClosing: partialCashClosing,
+        payrollCashDiscount: payrollCashDiscount,
+      );
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final summaries = _unitSummaries;
+    final totals = DashboardTotals.fromSummaries(summaries);
+
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        DashboardHeader(
+          selectedUnitFilter: selectedUnitFilter,
+          onUnitFilterChanged: onUnitFilterChanged,
+        ),
+        const SizedBox(height: 16),
         ResponsiveGrid(
           children: [
             MetricCard(
-              title: 'Passivo final',
-              value: formatCurrency(summary.finalLiability),
+              title: 'Passivo global',
+              value: formatCurrency(totals.finalLiability),
               icon: Icons.account_balance_wallet_outlined,
             ),
             MetricCard(
-              title: 'Receitas',
-              value: formatCurrency(summary.revenues),
+              title: 'Receitas globais',
+              value: formatCurrency(totals.revenues),
               icon: Icons.trending_up,
             ),
             MetricCard(
-              title: 'Despesas',
-              value: formatCurrency(summary.expenses),
+              title: 'Despesas globais',
+              value: formatCurrency(totals.expenses),
               icon: Icons.trending_down,
             ),
             MetricCard(
-              title: 'Assiduidade',
-              value: '${statement.attendanceScore} pts',
-              icon: Icons.fact_check_outlined,
+              title: 'Fechamento parcial',
+              value: formatCurrency(totals.partialCashClosing),
+              icon: Icons.point_of_sale_outlined,
             ),
           ],
         ),
         const SizedBox(height: 20),
         SectionPanel(
-          title: 'Colaborador em acompanhamento',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          title: 'Bancas',
+          child: Wrap(
+            spacing: 16,
+            runSpacing: 16,
             children: [
-              Text(
-                statement.employee.name,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text('Unidade: ${statement.employee.unit.label}'),
-              Text('Referencia: ${statement.referenceMonth.month}/'
-                  '${statement.referenceMonth.year}'),
+              for (final summary in summaries)
+                BancaMetricCard(summary: summary),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+class DashboardHeader extends StatelessWidget {
+  const DashboardHeader({
+    required this.selectedUnitFilter,
+    required this.onUnitFilterChanged,
+    super.key,
+  });
+
+  final Unit? selectedUnitFilter;
+  final ValueChanged<Unit?> onUnitFilterChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = const PageTitle(
+      title: 'Painel global',
+      subtitle: 'Visao consolidada por banca e metricas do mes.',
+    );
+    final filter = SizedBox(
+      width: 280,
+      child: DropdownButtonFormField<Unit?>(
+        isExpanded: true,
+        value: selectedUnitFilter,
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(),
+          labelText: 'Filtro de banca',
+        ),
+        items: [
+          const DropdownMenuItem<Unit?>(
+            value: null,
+            child: Text('Todas as bancas'),
+          ),
+          ...Unit.values.map(
+            (unit) => DropdownMenuItem<Unit?>(
+              value: unit,
+              child: Text(unit.label),
+            ),
+          ),
+        ],
+        onChanged: onUnitFilterChanged,
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 680) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              title,
+              const SizedBox(height: 12),
+              SizedBox(width: double.infinity, child: filter),
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: title),
+            const SizedBox(width: 16),
+            filter,
+          ],
+        );
+      },
+    );
+  }
+}
+
+class UnitDashboardSummary {
+  const UnitDashboardSummary({
+    required this.unit,
+    required this.employeeCount,
+    required this.revenues,
+    required this.expenses,
+    required this.finalLiability,
+    required this.partialCashClosing,
+    required this.payrollCashDiscount,
+  });
+
+  final Unit unit;
+  final int employeeCount;
+  final double revenues;
+  final double expenses;
+  final double finalLiability;
+  final double partialCashClosing;
+  final double payrollCashDiscount;
+}
+
+class DashboardTotals {
+  const DashboardTotals({
+    required this.revenues,
+    required this.expenses,
+    required this.finalLiability,
+    required this.partialCashClosing,
+  });
+
+  factory DashboardTotals.fromSummaries(List<UnitDashboardSummary> summaries) {
+    return DashboardTotals(
+      revenues: summaries.fold(0, (total, item) => total + item.revenues),
+      expenses: summaries.fold(0, (total, item) => total + item.expenses),
+      finalLiability: summaries.fold(
+        0,
+        (total, item) => total + item.finalLiability,
+      ),
+      partialCashClosing: summaries.fold(
+        0,
+        (total, item) => total + item.partialCashClosing,
+      ),
+    );
+  }
+
+  final double revenues;
+  final double expenses;
+  final double finalLiability;
+  final double partialCashClosing;
+}
+
+class BancaMetricCard extends StatelessWidget {
+  const BancaMetricCard({required this.summary, super.key});
+
+  final UnitDashboardSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 360,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF6F7F4),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFE1E5DF)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    summary.unit.label,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Text('${summary.employeeCount} colab.'),
+              ],
+            ),
+            const SizedBox(height: 14),
+            SummaryRow(label: 'Receitas', value: summary.revenues),
+            SummaryRow(label: 'Despesas', value: summary.expenses),
+            SummaryRow(
+              label: 'Fechamento parcial',
+              value: summary.partialCashClosing,
+            ),
+            if (summary.payrollCashDiscount > 0)
+              SummaryRow(
+                label: 'Desconto em folha',
+                value: summary.payrollCashDiscount,
+              ),
+            const Divider(height: 24),
+            SummaryRow(
+              label: 'Passivo da banca',
+              value: summary.finalLiability,
+              emphasized: true,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
