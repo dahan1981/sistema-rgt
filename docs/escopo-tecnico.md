@@ -9,7 +9,7 @@ Este documento traduz o PDF de demonstrativo mensal em módulos de aplicativo.
 - Cadastro de colaboradores.
 - Vínculo do colaborador com unidade.
 - Demonstrativo mensal por colaborador.
-- Lançamento de vales, faltas com data para histórico, incentivos, dobra e domingo compensatório.
+- Lançamento de vales, faltas com data para histórico, incentivos e bonificações.
 - Controle de caixa positivo e negativo com data e descrição.
 - Fechamento de caixa por data, unidade e colaborador.
 - Marcação de caixa negativo para desconto em folha salarial.
@@ -34,7 +34,7 @@ por colaborador deve respeitar o colaborador selecionado no aplicativo.
 O app calcula localmente:
 
 ```text
-receitas = incentivo + domingo + dobra + bonificação + caixa positivo
+receitas = incentivo + bonificação + fechamento de caixa positivo
 despesas = vales + desconto por faltas + caixa negativo
 passivo final = previsão salarial + receitas - despesas
 ```

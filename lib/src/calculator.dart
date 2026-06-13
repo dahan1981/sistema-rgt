@@ -8,10 +8,6 @@ class RgtCalculator {
     List<CashClosingEntry> cashClosings = const [],
     DateTime? today,
   }) {
-    final positiveCash = statement.positiveCashEntries.fold<double>(
-      0,
-      (total, entry) => total + entry.amount,
-    );
     final negativeCash = statement.negativeCashEntries.fold<double>(
       0,
       (total, entry) => total + entry.amount,
@@ -28,10 +24,7 @@ class RgtCalculator {
         : 0.0;
 
     final revenues = statement.incentive.amount +
-        (statement.launchSundayAsRevenue ? statement.sundayCompensation : 0) +
-        (statement.launchDoubleShiftAsRevenue ? statement.doubleShift : 0) +
         (statement.launchBalanceBonusAsRevenue ? statement.balanceBonus : 0) +
-        positiveCash +
         closingSummary.positive;
 
     final expenses = statement.vouchers +
@@ -43,7 +36,6 @@ class RgtCalculator {
       revenues: revenues,
       expenses: expenses,
       absenceDiscount: absenceDiscount,
-      positiveCash: positiveCash,
       negativeCash: negativeCash,
       partialCashClosing: closingSummary.balance,
       payrollCashDiscount: closingSummary.payrollDeductions,

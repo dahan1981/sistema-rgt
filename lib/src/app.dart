@@ -1327,40 +1327,13 @@ class StatementPage extends StatelessWidget {
                     label: 'Valor do incentivo',
                     value: statement.incentive.amount,
                   ),
-                  const SizedBox(height: 12),
-                  RevenueToggleField(
-                    label: 'Domingo compensatório',
-                    value: statement.sundayCompensation,
-                    enabledLabel: 'Lançar domingo em receita',
-                    enabled: statement.launchSundayAsRevenue,
-                    onChanged: (value) => onChanged(
-                      statement.copyWith(sundayCompensation: value),
-                    ),
-                    onEnabledChanged: (value) => onChanged(
-                      statement.copyWith(launchSundayAsRevenue: value),
-                    ),
-                  ),
                 ],
               ),
             ),
             SectionPanel(
-              title: 'Dobra e caixa',
+              title: 'Bonificação e caixa',
               child: Column(
                 children: [
-                  MoneyField(
-                    label: 'Dobra',
-                    value: statement.doubleShift,
-                    onChanged: (value) => onChanged(
-                      statement.copyWith(doubleShift: value),
-                    ),
-                  ),
-                  SwitchRow(
-                    label: 'Lançar dobra em receita',
-                    value: statement.launchDoubleShiftAsRevenue,
-                    onChanged: (value) => onChanged(
-                      statement.copyWith(launchDoubleShiftAsRevenue: value),
-                    ),
-                  ),
                   MoneyField(
                     label: 'Bonificação de balanço',
                     value: statement.balanceBonus,
@@ -2253,7 +2226,6 @@ class SummaryTable extends StatelessWidget {
         SummaryRow(label: 'Despesas', value: summary.expenses),
         SummaryRow(
             label: 'Desconto por faltas', value: summary.absenceDiscount),
-        SummaryRow(label: 'Caixa positivo', value: summary.positiveCash),
         SummaryRow(label: 'Caixa negativo', value: summary.negativeCash),
         SummaryRow(
           label: 'Fechamento de caixa parcial',
@@ -2324,13 +2296,8 @@ extension MonthlyStatementCopy on MonthlyStatement {
     bool? discountAbsencesAsExpense,
     int? attendanceScore,
     Incentive? incentive,
-    double? sundayCompensation,
-    bool? launchSundayAsRevenue,
-    double? doubleShift,
-    bool? launchDoubleShiftAsRevenue,
     double? balanceBonus,
     bool? launchBalanceBonusAsRevenue,
-    List<CashEntry>? positiveCashEntries,
     List<CashEntry>? negativeCashEntries,
     bool? launchNegativeCashAsExpense,
   }) {
@@ -2344,16 +2311,9 @@ extension MonthlyStatementCopy on MonthlyStatement {
           discountAbsencesAsExpense ?? this.discountAbsencesAsExpense,
       attendanceScore: attendanceScore ?? this.attendanceScore,
       incentive: incentive ?? this.incentive,
-      sundayCompensation: sundayCompensation ?? this.sundayCompensation,
-      launchSundayAsRevenue:
-          launchSundayAsRevenue ?? this.launchSundayAsRevenue,
-      doubleShift: doubleShift ?? this.doubleShift,
-      launchDoubleShiftAsRevenue:
-          launchDoubleShiftAsRevenue ?? this.launchDoubleShiftAsRevenue,
       balanceBonus: balanceBonus ?? this.balanceBonus,
       launchBalanceBonusAsRevenue:
           launchBalanceBonusAsRevenue ?? this.launchBalanceBonusAsRevenue,
-      positiveCashEntries: positiveCashEntries ?? this.positiveCashEntries,
       negativeCashEntries: negativeCashEntries ?? this.negativeCashEntries,
       launchNegativeCashAsExpense:
           launchNegativeCashAsExpense ?? this.launchNegativeCashAsExpense,

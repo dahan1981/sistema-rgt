@@ -122,13 +122,8 @@ class MonthlyStatement {
     required this.discountAbsencesAsExpense,
     required this.attendanceScore,
     required this.incentive,
-    required this.sundayCompensation,
-    required this.launchSundayAsRevenue,
-    required this.doubleShift,
-    required this.launchDoubleShiftAsRevenue,
     required this.balanceBonus,
     required this.launchBalanceBonusAsRevenue,
-    required this.positiveCashEntries,
     required this.negativeCashEntries,
     required this.launchNegativeCashAsExpense,
   });
@@ -141,13 +136,8 @@ class MonthlyStatement {
   final bool discountAbsencesAsExpense;
   final int attendanceScore;
   final Incentive incentive;
-  final double sundayCompensation;
-  final bool launchSundayAsRevenue;
-  final double doubleShift;
-  final bool launchDoubleShiftAsRevenue;
   final double balanceBonus;
   final bool launchBalanceBonusAsRevenue;
-  final List<CashEntry> positiveCashEntries;
   final List<CashEntry> negativeCashEntries;
   final bool launchNegativeCashAsExpense;
 
@@ -159,7 +149,6 @@ class FinancialSummary {
     required this.revenues,
     required this.expenses,
     required this.absenceDiscount,
-    required this.positiveCash,
     required this.negativeCash,
     required this.partialCashClosing,
     required this.payrollCashDiscount,
@@ -169,7 +158,6 @@ class FinancialSummary {
   final double revenues;
   final double expenses;
   final double absenceDiscount;
-  final double positiveCash;
   final double negativeCash;
   final double partialCashClosing;
   final double payrollCashDiscount;

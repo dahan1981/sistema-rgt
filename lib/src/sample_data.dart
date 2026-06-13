@@ -54,19 +54,8 @@ MonthlyStatement sampleStatement(Employee employee) {
     discountAbsencesAsExpense: true,
     attendanceScore: 94,
     incentive: Incentive.score2,
-    sundayCompensation: 80,
-    launchSundayAsRevenue: true,
-    doubleShift: 120,
-    launchDoubleShiftAsRevenue: true,
     balanceBonus: 70,
     launchBalanceBonusAsRevenue: true,
-    positiveCashEntries: [
-      CashEntry(
-        date: DateTime(2026, 6, 8),
-        description: 'Ajuste caixa positivo',
-        amount: 45,
-      ),
-    ],
     negativeCashEntries: [
       CashEntry(
         date: DateTime(2026, 6, 12),

@@ -142,6 +142,19 @@ void main() {
     expect(find.text('R\$ 100,00'), findsWidgets);
   });
 
+  testWidgets('monthly statement omits removed compensation fields',
+      (tester) async {
+    await tester.pumpWidget(const SistemaRgtApp());
+
+    await tester.tap(find.text('Mensal'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Domingo compensatório'), findsNothing);
+    expect(find.text('Dobra'), findsNothing);
+    expect(find.text('Caixa positivo'), findsNothing);
+    expect(find.text('Bonificação e caixa'), findsOneWidget);
+  });
+
   testWidgets('shows absence history with dates', (tester) async {
     await tester.pumpWidget(const SistemaRgtApp());
 
