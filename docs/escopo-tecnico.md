@@ -9,7 +9,7 @@ Este documento traduz o PDF de demonstrativo mensal em módulos de aplicativo.
 - Cadastro de colaboradores.
 - Vínculo do colaborador com unidade.
 - Demonstrativo mensal por colaborador.
-- Lançamento de vales, faltas, incentivos, dobra e domingo compensatório.
+- Lançamento de vales, faltas com data para histórico, incentivos, dobra e domingo compensatório.
 - Controle de caixa positivo e negativo com data e descrição.
 - Fechamento de caixa por data, unidade e colaborador.
 - Marcação de caixa negativo para desconto em folha salarial.
@@ -39,7 +39,7 @@ despesas = vales + desconto por faltas + caixa negativo
 passivo final = previsão salarial + receitas - despesas
 ```
 
-O desconto por faltas usa `previsão salarial / 30 * quantidade de faltas` quando a opção de lançar faltas como despesa está ativa.
+O desconto por faltas usa `previsão salarial / 30 * quantidade de faltas registradas` quando a opção de lançar faltas como despesa está ativa.
 
 ## Fechamento de caixa
 

@@ -118,7 +118,7 @@ class MonthlyStatement {
     required this.referenceMonth,
     required this.salaryForecast,
     required this.vouchers,
-    required this.absences,
+    required this.absenceDates,
     required this.discountAbsencesAsExpense,
     required this.attendanceScore,
     required this.incentive,
@@ -137,7 +137,7 @@ class MonthlyStatement {
   final DateTime referenceMonth;
   final double salaryForecast;
   final double vouchers;
-  final int absences;
+  final List<DateTime> absenceDates;
   final bool discountAbsencesAsExpense;
   final int attendanceScore;
   final Incentive incentive;
@@ -150,6 +150,8 @@ class MonthlyStatement {
   final List<CashEntry> positiveCashEntries;
   final List<CashEntry> negativeCashEntries;
   final bool launchNegativeCashAsExpense;
+
+  int get absences => absenceDates.length;
 }
 
 class FinancialSummary {

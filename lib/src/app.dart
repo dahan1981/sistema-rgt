@@ -1273,11 +1273,10 @@ class StatementPage extends StatelessWidget {
                       statement.copyWith(vouchers: value),
                     ),
                   ),
-                  NumberStepper(
-                    label: 'Faltas',
-                    value: statement.absences,
-                    onChanged: (value) => onChanged(
-                      statement.copyWith(absences: value),
+                  AbsenceHistoryField(
+                    dates: statement.absenceDates,
+                    onChanged: (dates) => onChanged(
+                      statement.copyWith(absenceDates: dates),
                     ),
                   ),
                   SwitchRow(
@@ -2045,6 +2044,100 @@ class RevenueToggleField extends StatelessWidget {
   }
 }
 
+class AbsenceHistoryField extends StatelessWidget {
+  const AbsenceHistoryField({
+    required this.dates,
+    required this.onChanged,
+    super.key,
+  });
+
+  final List<DateTime> dates;
+  final ValueChanged<List<DateTime>> onChanged;
+
+  Future<void> _addDate(BuildContext context) async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+
+    if (selected == null) {
+      return;
+    }
+
+    final normalized = DateTime(selected.year, selected.month, selected.day);
+    final alreadyExists = dates.any((date) {
+      return date.year == normalized.year &&
+          date.month == normalized.month &&
+          date.day == normalized.day;
+    });
+    if (alreadyExists) {
+      return;
+    }
+
+    final updated = [...dates, normalized]..sort((a, b) => a.compareTo(b));
+    onChanged(updated);
+  }
+
+  void _removeDate(DateTime date) {
+    final updated = [...dates]..remove(date);
+    onChanged(updated);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFE1E5DF)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  dates.length == 1
+                      ? '1 falta registrada'
+                      : '${dates.length} faltas registradas',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _addDate(context),
+                icon: const Icon(Icons.event_busy_outlined),
+                label: const Text('Adicionar falta'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (dates.isEmpty)
+            const Text(
+              'Nenhuma falta lançada.',
+              style: TextStyle(color: Color(0xFF5E6762)),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final date in dates)
+                  InputChip(
+                    label: Text(formatDate(date)),
+                    onDeleted: () => _removeDate(date),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class NumberStepper extends StatelessWidget {
   const NumberStepper({
     required this.label,
@@ -2194,7 +2287,7 @@ extension MonthlyStatementCopy on MonthlyStatement {
     DateTime? referenceMonth,
     double? salaryForecast,
     double? vouchers,
-    int? absences,
+    List<DateTime>? absenceDates,
     bool? discountAbsencesAsExpense,
     int? attendanceScore,
     Incentive? incentive,
@@ -2213,7 +2306,7 @@ extension MonthlyStatementCopy on MonthlyStatement {
       referenceMonth: referenceMonth ?? this.referenceMonth,
       salaryForecast: salaryForecast ?? this.salaryForecast,
       vouchers: vouchers ?? this.vouchers,
-      absences: absences ?? this.absences,
+      absenceDates: absenceDates ?? this.absenceDates,
       discountAbsencesAsExpense:
           discountAbsencesAsExpense ?? this.discountAbsencesAsExpense,
       attendanceScore: attendanceScore ?? this.attendanceScore,

@@ -142,6 +142,17 @@ void main() {
     expect(find.text('R\$ 100,00'), findsWidgets);
   });
 
+  testWidgets('shows absence history with dates', (tester) async {
+    await tester.pumpWidget(const SistemaRgtApp());
+
+    await tester.tap(find.text('Mensal'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 falta registrada'), findsOneWidget);
+    expect(find.text('10/06/2026'), findsOneWidget);
+    expect(find.text('Adicionar falta'), findsOneWidget);
+  });
+
   testWidgets('opens report options with cash closing choices', (tester) async {
     await tester.pumpWidget(const SistemaRgtApp());
 

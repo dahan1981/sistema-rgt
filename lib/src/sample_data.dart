@@ -50,7 +50,7 @@ MonthlyStatement sampleStatement(Employee employee) {
     referenceMonth: DateTime(2026, 6),
     salaryForecast: 2450,
     vouchers: 180,
-    absences: 1,
+    absenceDates: [DateTime(2026, 6, 10)],
     discountAbsencesAsExpense: true,
     attendanceScore: 94,
     incentive: Incentive.score2,
