@@ -2044,7 +2044,7 @@ class RevenueToggleField extends StatelessWidget {
   }
 }
 
-class AbsenceHistoryField extends StatelessWidget {
+class AbsenceHistoryField extends StatefulWidget {
   const AbsenceHistoryField({
     required this.dates,
     required this.onChanged,
@@ -2054,10 +2054,22 @@ class AbsenceHistoryField extends StatelessWidget {
   final List<DateTime> dates;
   final ValueChanged<List<DateTime>> onChanged;
 
-  Future<void> _addDate(BuildContext context) async {
+  @override
+  State<AbsenceHistoryField> createState() => _AbsenceHistoryFieldState();
+}
+
+class _AbsenceHistoryFieldState extends State<AbsenceHistoryField> {
+  late DateTime _selectedDate = _today();
+
+  DateTime _today() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  Future<void> _pickDate(BuildContext context) async {
     final selected = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
+      initialDate: _selectedDate,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
     );
@@ -2067,22 +2079,30 @@ class AbsenceHistoryField extends StatelessWidget {
     }
 
     final normalized = DateTime(selected.year, selected.month, selected.day);
-    final alreadyExists = dates.any((date) {
-      return date.year == normalized.year &&
-          date.month == normalized.month &&
-          date.day == normalized.day;
-    });
-    if (alreadyExists) {
+    setState(() => _selectedDate = normalized);
+  }
+
+  void _launchAbsence() {
+    if (_selectedDateExists) {
       return;
     }
 
-    final updated = [...dates, normalized]..sort((a, b) => a.compareTo(b));
-    onChanged(updated);
+    final updated = [...widget.dates, _selectedDate]
+      ..sort((a, b) => a.compareTo(b));
+    widget.onChanged(updated);
+  }
+
+  bool get _selectedDateExists {
+    return widget.dates.any((date) {
+      return date.year == _selectedDate.year &&
+          date.month == _selectedDate.month &&
+          date.day == _selectedDate.day;
+    });
   }
 
   void _removeDate(DateTime date) {
-    final updated = [...dates]..remove(date);
-    onChanged(updated);
+    final updated = [...widget.dates]..remove(date);
+    widget.onChanged(updated);
   }
 
   @override
@@ -2101,21 +2121,34 @@ class AbsenceHistoryField extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  dates.length == 1
+                  widget.dates.length == 1
                       ? '1 falta registrada'
-                      : '${dates.length} faltas registradas',
+                      : '${widget.dates.length} faltas registradas',
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
-              OutlinedButton.icon(
-                onPressed: () => _addDate(context),
-                icon: const Icon(Icons.event_busy_outlined),
-                label: const Text('Adicionar falta'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _pickDate(context),
+                  icon: const Icon(Icons.calendar_month_outlined),
+                  label: Text(formatDate(_selectedDate)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: _selectedDateExists ? null : _launchAbsence,
+                icon: const Icon(Icons.save_outlined),
+                label: const Text('Lançar falta'),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          if (dates.isEmpty)
+          const SizedBox(height: 12),
+          if (widget.dates.isEmpty)
             const Text(
               'Nenhuma falta lançada.',
               style: TextStyle(color: Color(0xFF5E6762)),
@@ -2125,7 +2158,7 @@ class AbsenceHistoryField extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final date in dates)
+                for (final date in widget.dates)
                   InputChip(
                     label: Text(formatDate(date)),
                     onDeleted: () => _removeDate(date),
