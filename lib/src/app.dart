@@ -1002,45 +1002,37 @@ class BancaMetricCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    summary.unit.label,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+            Text(
+              summary.unit.label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<Employee?>(
+              isExpanded: true,
+              value: summary.selectedEmployee,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                labelText: 'Colaborador',
+                isDense: true,
+              ),
+              items: [
+                const DropdownMenuItem<Employee?>(
+                  value: null,
+                  child: Text('Todos da banca'),
                 ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  width: 170,
-                  child: DropdownButtonFormField<Employee?>(
-                    isExpanded: true,
-                    value: summary.selectedEmployee,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Colaborador',
-                      isDense: true,
-                    ),
-                    items: [
-                      const DropdownMenuItem<Employee?>(
-                        value: null,
-                        child: Text('Todos da banca'),
-                      ),
-                      ...summary.employees.map(
-                        (employee) => DropdownMenuItem<Employee?>(
-                          value: employee,
-                          child: Text(employee.name),
-                        ),
-                      ),
-                    ],
-                    onChanged: onEmployeeChanged,
+                ...summary.employees.map(
+                  (employee) => DropdownMenuItem<Employee?>(
+                    value: employee,
+                    child: Text(employee.name),
                   ),
                 ),
               ],
+              onChanged: onEmployeeChanged,
             ),
             const SizedBox(height: 14),
             SummaryRow(label: 'Receitas', value: summary.revenues),
