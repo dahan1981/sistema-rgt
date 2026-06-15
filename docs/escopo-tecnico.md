@@ -8,7 +8,7 @@ Este documento traduz o PDF de demonstrativo mensal em módulos de aplicativo.
 - Autenticação e permissões por perfil.
 - Cadastro de colaboradores.
 - Vínculo do colaborador com unidade.
-- Demonstrativo mensal por colaborador.
+- Demonstrativo mensal por colaborador, com lançamento de fechamento de caixa na mesma tela.
 - Lançamento de vales, faltas com data para histórico, incentivos e bonificações.
 - Controle de caixa positivo e negativo com data e descrição.
 - Fechamento de caixa por data, unidade e colaborador.
@@ -41,7 +41,7 @@ passivo final = previsão salarial + receitas - despesas
 
 O desconto por faltas usa `previsão salarial / 30 * quantidade de faltas registradas` quando a opção de lançar faltas como despesa está ativa.
 
-## Fechamento de caixa
+## Fechamento de caixa no demonstrativo mensal
 
 O RH deve conseguir lançar caixas positivos e negativos informando:
 

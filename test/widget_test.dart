@@ -52,12 +52,19 @@ void main() {
     expect(find.text('Todos os colaboradores'), findsWidgets);
   });
 
-  testWidgets('opens cash closing page', (tester) async {
+  testWidgets('monthly statement includes cash closing section',
+      (tester) async {
     await tester.pumpWidget(const SistemaRgtApp());
 
-    await tester.tap(find.text('Caixa'));
+    await tester.tap(find.text('Mensal'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Caixa'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('Fechamento de caixa'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Fechamento de caixa'), findsOneWidget);
     expect(find.text('Caixa positivo no mês'), findsOneWidget);
     expect(find.text('Descontar em folha'), findsOneWidget);

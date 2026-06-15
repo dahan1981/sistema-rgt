@@ -179,14 +179,11 @@ class _RgtHomePageState extends State<RgtHomePage> {
       StatementPage(
         statement: _statement,
         summary: summary,
-        onChanged: (statement) => setState(() => _statement = statement),
-      ),
-      CashClosingPage(
         employees: sampleEmployees,
-        entries: _cashClosings,
+        cashClosings: _cashClosings,
         selectedUnit: _selectedUnit,
         selectedEmployee: _selectedEmployee,
-        onUnitSelected: _selectUnit,
+        onChanged: (statement) => setState(() => _statement = statement),
         onEmployeeSelected: (employee) {
           setState(() {
             _selectedEmployee = employee;
@@ -194,7 +191,8 @@ class _RgtHomePageState extends State<RgtHomePage> {
             _statement = sampleStatement(employee);
           });
         },
-        onEntryAdded: _addCashClosing,
+        onUnitSelected: _selectUnit,
+        onCashClosingAdded: _addCashClosing,
       ),
     ];
 
@@ -243,11 +241,6 @@ class _RgtHomePageState extends State<RgtHomePage> {
                   icon: Icon(Icons.receipt_long_outlined),
                   selectedIcon: Icon(Icons.receipt_long),
                   label: 'Mensal',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.point_of_sale_outlined),
-                  selectedIcon: Icon(Icons.point_of_sale),
-                  label: 'Caixa',
                 ),
               ],
             ),
@@ -595,12 +588,6 @@ class RgtSideNav extends StatelessWidget {
             label: 'Demonstrativo mensal',
             selected: selectedIndex == 2,
             onTap: () => onChanged(2),
-          ),
-          NavButton(
-            icon: Icons.point_of_sale_outlined,
-            label: 'Fechamento de caixa',
-            selected: selectedIndex == 3,
-            onTap: () => onChanged(3),
           ),
           const Spacer(),
           const Text(
@@ -1235,13 +1222,27 @@ class StatementPage extends StatelessWidget {
   const StatementPage({
     required this.statement,
     required this.summary,
+    required this.employees,
+    required this.cashClosings,
+    required this.selectedUnit,
+    required this.selectedEmployee,
     required this.onChanged,
+    required this.onUnitSelected,
+    required this.onEmployeeSelected,
+    required this.onCashClosingAdded,
     super.key,
   });
 
   final MonthlyStatement statement;
   final FinancialSummary summary;
+  final List<Employee> employees;
+  final List<CashClosingEntry> cashClosings;
+  final Unit selectedUnit;
+  final Employee selectedEmployee;
   final ValueChanged<MonthlyStatement> onChanged;
+  final ValueChanged<Unit> onUnitSelected;
+  final ValueChanged<Employee> onEmployeeSelected;
+  final ValueChanged<CashClosingEntry> onCashClosingAdded;
 
   @override
   Widget build(BuildContext context) {
@@ -1364,6 +1365,17 @@ class StatementPage extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 16),
+        CashClosingPage(
+          employees: employees,
+          entries: cashClosings,
+          selectedUnit: selectedUnit,
+          selectedEmployee: selectedEmployee,
+          onUnitSelected: onUnitSelected,
+          onEmployeeSelected: onEmployeeSelected,
+          onEntryAdded: onCashClosingAdded,
+          embedded: true,
+        ),
       ],
     );
   }
@@ -1378,6 +1390,7 @@ class CashClosingPage extends StatefulWidget {
     required this.onUnitSelected,
     required this.onEmployeeSelected,
     required this.onEntryAdded,
+    this.embedded = false,
     super.key,
   });
 
@@ -1388,6 +1401,7 @@ class CashClosingPage extends StatefulWidget {
   final ValueChanged<Unit> onUnitSelected;
   final ValueChanged<Employee> onEmployeeSelected;
   final ValueChanged<CashClosingEntry> onEntryAdded;
+  final bool embedded;
 
   @override
   State<CashClosingPage> createState() => _CashClosingPageState();
@@ -1518,174 +1532,182 @@ class _CashClosingPageState extends State<CashClosingPage> {
             : null;
     final canSubmit = _amount > 0 && selectedEmployee != null;
 
+    final content = [
+      const PageTitle(
+        title: 'Fechamento de caixa',
+        subtitle: 'Lançamentos por data, unidade e colaborador.',
+      ),
+      const SizedBox(height: 16),
+      ResponsiveGrid(
+        children: [
+          MetricCard(
+            title: 'Caixa positivo no mês',
+            value: formatCurrency(summary.positive),
+            icon: Icons.add_card_outlined,
+          ),
+          MetricCard(
+            title: 'Caixa negativo no mês',
+            value: formatCurrency(summary.negative),
+            icon: Icons.credit_card_off_outlined,
+          ),
+          MetricCard(
+            title: 'Saldo até hoje',
+            value: formatCurrency(summary.balance),
+            icon: Icons.account_balance_outlined,
+          ),
+          MetricCard(
+            title: 'Descontar em folha',
+            value: formatCurrency(summary.payrollDeductions),
+            icon: Icons.payments_outlined,
+          ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      ResponsiveGrid(
+        children: [
+          SectionPanel(
+            title: 'Novo lançamento',
+            child: Column(
+              children: [
+                DropdownButtonFormField<Unit>(
+                  value: widget.selectedUnit,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'Unidade',
+                  ),
+                  items: Unit.values
+                      .map(
+                        (unit) => DropdownMenuItem(
+                          value: unit,
+                          child: Text(unit.label),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (unit) {
+                    if (unit != null) {
+                      widget.onUnitSelected(unit);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<Employee?>(
+                  value: selectedEmployee,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'Colaborador',
+                  ),
+                  items: [
+                    if (isGlobalUnit)
+                      const DropdownMenuItem<Employee?>(
+                        value: null,
+                        child: Text('Todos'),
+                      ),
+                    ...employees.map(
+                      (employee) => DropdownMenuItem<Employee?>(
+                        value: employee,
+                        child: Text(employee.name),
+                      ),
+                    ),
+                  ],
+                  onChanged: (employee) {
+                    if (employee != null) {
+                      widget.onEmployeeSelected(employee);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                SegmentedButton<CashClosingType>(
+                  segments: const [
+                    ButtonSegment(
+                      value: CashClosingType.positive,
+                      label: Text('Positivo'),
+                      icon: Icon(Icons.trending_up),
+                    ),
+                    ButtonSegment(
+                      value: CashClosingType.negative,
+                      label: Text('Negativo'),
+                      icon: Icon(Icons.trending_down),
+                    ),
+                  ],
+                  selected: {_type},
+                  onSelectionChanged: (values) {
+                    setState(() {
+                      _type = values.first;
+                      if (_type == CashClosingType.positive) {
+                        _deductFromPayroll = false;
+                      }
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                MoneyField(
+                  label: 'Valor do caixa',
+                  value: _amount,
+                  onChanged: (value) => setState(() => _amount = value),
+                ),
+                TextField(
+                  controller: _descriptionController,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'Descrição',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _pickDate,
+                        icon: const Icon(Icons.calendar_month_outlined),
+                        label: Text(formatDate(_date)),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_type == CashClosingType.negative)
+                  SwitchRow(
+                    label: 'Descontar de folha salarial',
+                    value: _deductFromPayroll,
+                    onChanged: (value) {
+                      setState(() => _deductFromPayroll = value);
+                    },
+                  ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: canSubmit ? _submit : null,
+                    icon: const Icon(Icons.save_outlined),
+                    label: const Text('Lançar caixa'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SectionPanel(
+            title: 'Lançamentos do mês até hoje',
+            child: entries.isEmpty
+                ? const Text('Nenhum lançamento neste filtro.')
+                : Column(
+                    children: [
+                      for (final entry in entries) CashClosingRow(entry: entry),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    ];
+
+    if (widget.embedded) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: content,
+      );
+    }
+
     return ListView(
       padding: const EdgeInsets.all(24),
-      children: [
-        const PageTitle(
-          title: 'Fechamento de caixa',
-          subtitle: 'Lançamentos por data, unidade e colaborador.',
-        ),
-        const SizedBox(height: 16),
-        ResponsiveGrid(
-          children: [
-            MetricCard(
-              title: 'Caixa positivo no mês',
-              value: formatCurrency(summary.positive),
-              icon: Icons.add_card_outlined,
-            ),
-            MetricCard(
-              title: 'Caixa negativo no mês',
-              value: formatCurrency(summary.negative),
-              icon: Icons.credit_card_off_outlined,
-            ),
-            MetricCard(
-              title: 'Saldo até hoje',
-              value: formatCurrency(summary.balance),
-              icon: Icons.account_balance_outlined,
-            ),
-            MetricCard(
-              title: 'Descontar em folha',
-              value: formatCurrency(summary.payrollDeductions),
-              icon: Icons.payments_outlined,
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        ResponsiveGrid(
-          children: [
-            SectionPanel(
-              title: 'Novo lançamento',
-              child: Column(
-                children: [
-                  DropdownButtonFormField<Unit>(
-                    value: widget.selectedUnit,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Unidade',
-                    ),
-                    items: Unit.values
-                        .map(
-                          (unit) => DropdownMenuItem(
-                            value: unit,
-                            child: Text(unit.label),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (unit) {
-                      if (unit != null) {
-                        widget.onUnitSelected(unit);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<Employee?>(
-                    value: selectedEmployee,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Colaborador',
-                    ),
-                    items: [
-                      if (isGlobalUnit)
-                        const DropdownMenuItem<Employee?>(
-                          value: null,
-                          child: Text('Todos'),
-                        ),
-                      ...employees.map(
-                        (employee) => DropdownMenuItem<Employee?>(
-                          value: employee,
-                          child: Text(employee.name),
-                        ),
-                      ),
-                    ],
-                    onChanged: (employee) {
-                      if (employee != null) {
-                        widget.onEmployeeSelected(employee);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  SegmentedButton<CashClosingType>(
-                    segments: const [
-                      ButtonSegment(
-                        value: CashClosingType.positive,
-                        label: Text('Positivo'),
-                        icon: Icon(Icons.trending_up),
-                      ),
-                      ButtonSegment(
-                        value: CashClosingType.negative,
-                        label: Text('Negativo'),
-                        icon: Icon(Icons.trending_down),
-                      ),
-                    ],
-                    selected: {_type},
-                    onSelectionChanged: (values) {
-                      setState(() {
-                        _type = values.first;
-                        if (_type == CashClosingType.positive) {
-                          _deductFromPayroll = false;
-                        }
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  MoneyField(
-                    label: 'Valor do caixa',
-                    value: _amount,
-                    onChanged: (value) => setState(() => _amount = value),
-                  ),
-                  TextField(
-                    controller: _descriptionController,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Descrição',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _pickDate,
-                          icon: const Icon(Icons.calendar_month_outlined),
-                          label: Text(formatDate(_date)),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (_type == CashClosingType.negative)
-                    SwitchRow(
-                      label: 'Descontar de folha salarial',
-                      value: _deductFromPayroll,
-                      onChanged: (value) {
-                        setState(() => _deductFromPayroll = value);
-                      },
-                    ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: canSubmit ? _submit : null,
-                      icon: const Icon(Icons.save_outlined),
-                      label: const Text('Lançar caixa'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SectionPanel(
-              title: 'Lançamentos do mês até hoje',
-              child: entries.isEmpty
-                  ? const Text('Nenhum lançamento neste filtro.')
-                  : Column(
-                      children: [
-                        for (final entry in entries)
-                          CashClosingRow(entry: entry),
-                      ],
-                    ),
-            ),
-          ],
-        ),
-      ],
+      children: content,
     );
   }
 }
