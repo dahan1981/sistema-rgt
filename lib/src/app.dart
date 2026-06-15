@@ -36,23 +36,68 @@ class RgtHomePage extends StatefulWidget {
 class _RgtHomePageState extends State<RgtHomePage> {
   final _calculator = const RgtCalculator();
   var _selectedIndex = 0;
-  var _selectedEmployee = sampleEmployees.first;
-  var _selectedUnit = sampleEmployees.first.unit;
+  late List<Employee> _employees = [...sampleEmployees];
+  late Employee _selectedEmployee = _employees.first;
+  late Unit _selectedUnit =
+      _effectiveUnitFor(_selectedEmployee, DateTime.now());
   Unit? _dashboardUnitFilter;
+  final List<UnitAssignment> _unitAssignments = [];
   late final List<CashClosingEntry> _cashClosings = [
     ...sampleCashClosings,
   ];
-  late MonthlyStatement _statement = sampleStatement(_selectedEmployee);
+  late MonthlyStatement _statement = _statementFor(_selectedEmployee);
+
+  Employee _employeeWithEffectiveUnit(Employee employee, DateTime date) {
+    return employee.copyWith(unit: _effectiveUnitFor(employee, date));
+  }
+
+  Unit _effectiveUnitFor(Employee employee, DateTime date) {
+    final normalized = DateTime(date.year, date.month, date.day);
+    final assignments = _unitAssignments.where((assignment) {
+      return assignment.employeeId == employee.id &&
+          _sameDay(assignment.date, normalized);
+    }).toList();
+
+    if (assignments.isEmpty) {
+      return employee.unit;
+    }
+
+    assignments.sort((a, b) => a.id.compareTo(b.id));
+    return assignments.last.unit;
+  }
+
+  bool _sameDay(DateTime first, DateTime second) {
+    return first.year == second.year &&
+        first.month == second.month &&
+        first.day == second.day;
+  }
+
+  List<Employee> get _effectiveEmployeesToday {
+    final today = DateTime.now();
+    return _employees.map((employee) {
+      return _employeeWithEffectiveUnit(employee, today);
+    }).toList();
+  }
+
+  MonthlyStatement _statementFor(Employee employee) {
+    return sampleStatement(
+        _employeeWithEffectiveUnit(employee, DateTime.now()));
+  }
+
+  Employee _currentEmployeeById(String id) {
+    return _employees.firstWhere((employee) => employee.id == id);
+  }
 
   void _selectEmployee(Employee employee) {
+    final currentEmployee = _currentEmployeeById(employee.id);
     setState(() {
-      _selectedEmployee = employee;
-      _selectedUnit = employee.unit;
-      _statement = sampleStatement(employee);
+      _selectedEmployee = currentEmployee;
+      _selectedUnit = _effectiveUnitFor(currentEmployee, DateTime.now());
+      _statement = _statementFor(currentEmployee);
       _selectedIndex = 2;
     });
     _showTabFeedback(
-      'Demonstrativo mensal aberto para ${employee.name}.',
+      'Demonstrativo mensal aberto para ${currentEmployee.name}.',
     );
   }
 
@@ -62,7 +107,7 @@ class _RgtHomePageState extends State<RgtHomePage> {
       return;
     }
 
-    final employeesInUnit = sampleEmployees.where((employee) {
+    final employeesInUnit = _effectiveEmployeesToday.where((employee) {
       return employee.unit == unit;
     }).toList();
 
@@ -71,16 +116,45 @@ class _RgtHomePageState extends State<RgtHomePage> {
     }
 
     final employee = employeesInUnit.first;
+    final currentEmployee = _currentEmployeeById(employee.id);
     setState(() {
       _selectedUnit = unit;
-      _selectedEmployee = employee;
-      _statement = sampleStatement(employee);
+      _selectedEmployee = currentEmployee;
+      _statement = _statementFor(currentEmployee);
     });
   }
 
   void _addCashClosing(CashClosingEntry entry) {
     setState(() {
       _cashClosings.insert(0, entry);
+    });
+  }
+
+  void _updateEmployee(Employee updatedEmployee) {
+    setState(() {
+      _employees = _employees.map((employee) {
+        return employee.id == updatedEmployee.id ? updatedEmployee : employee;
+      }).toList();
+      if (_selectedEmployee.id == updatedEmployee.id) {
+        _selectedEmployee = updatedEmployee;
+        _selectedUnit = _effectiveUnitFor(updatedEmployee, DateTime.now());
+        _statement = _statement.copyWith(
+          employee: _employeeWithEffectiveUnit(updatedEmployee, DateTime.now()),
+        );
+      }
+    });
+  }
+
+  void _addUnitAssignment(UnitAssignment assignment) {
+    setState(() {
+      _unitAssignments.insert(0, assignment);
+      if (_selectedEmployee.id == assignment.employeeId) {
+        _selectedUnit = _effectiveUnitFor(_selectedEmployee, DateTime.now());
+        _statement = _statement.copyWith(
+          employee:
+              _employeeWithEffectiveUnit(_selectedEmployee, DateTime.now()),
+        );
+      }
     });
   }
 
@@ -111,7 +185,7 @@ class _RgtHomePageState extends State<RgtHomePage> {
       context: context,
       builder: (context) {
         return ReportOptionsDialog(
-          employees: sampleEmployees,
+          employees: _effectiveEmployeesToday,
           selectedEmployee: _selectedEmployee,
           selectedUnit: _selectedUnit,
         );
@@ -155,14 +229,16 @@ class _RgtHomePageState extends State<RgtHomePage> {
   @override
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.sizeOf(context).width >= 900;
+    final effectiveEmployees = _effectiveEmployeesToday;
     final summary = _calculator.calculate(
       _statement,
       cashClosings: _cashClosings,
+      restrictCashClosingsToStatementUnit: false,
     );
 
     final pages = [
       DashboardPage(
-        employees: sampleEmployees,
+        employees: effectiveEmployees,
         cashClosings: _cashClosings,
         selectedUnitFilter: _dashboardUnitFilter,
         onUnitFilterChanged: (unit) {
@@ -170,28 +246,39 @@ class _RgtHomePageState extends State<RgtHomePage> {
         },
       ),
       EmployeesPage(
-        employees: sampleEmployees,
+        employees: _employees,
+        unitAssignments: _unitAssignments,
         selectedUnit: _selectedUnit,
         selectedEmployee: _selectedEmployee,
+        effectiveUnitForDate: _effectiveUnitFor,
         onUnitSelected: _selectUnit,
         onEmployeeSelected: _selectEmployee,
+        onEmployeeSaved: _updateEmployee,
+        onUnitAssignmentAdded: _addUnitAssignment,
       ),
       StatementPage(
         statement: _statement,
         summary: summary,
-        employees: sampleEmployees,
+        employees: effectiveEmployees,
         cashClosings: _cashClosings,
         selectedUnit: _selectedUnit,
-        selectedEmployee: _selectedEmployee,
+        selectedEmployee: _employeeWithEffectiveUnit(
+          _selectedEmployee,
+          DateTime.now(),
+        ),
         onChanged: (statement) => setState(() => _statement = statement),
         onEmployeeSelected: (employee) {
+          final currentEmployee = _currentEmployeeById(employee.id);
           setState(() {
-            _selectedEmployee = employee;
-            _selectedUnit = employee.unit;
-            _statement = sampleStatement(employee);
+            _selectedEmployee = currentEmployee;
+            _selectedUnit = _effectiveUnitFor(currentEmployee, DateTime.now());
+            _statement = _statementFor(currentEmployee);
           });
         },
         onUnitSelected: _selectUnit,
+        effectiveUnitForDate: (employee, date) {
+          return _effectiveUnitFor(_currentEmployeeById(employee.id), date);
+        },
         onCashClosingAdded: _addCashClosing,
       ),
     ];
@@ -1049,25 +1136,34 @@ class BancaMetricCard extends StatelessWidget {
 class EmployeesPage extends StatelessWidget {
   const EmployeesPage({
     required this.employees,
+    required this.unitAssignments,
     required this.selectedUnit,
     required this.selectedEmployee,
+    required this.effectiveUnitForDate,
     required this.onUnitSelected,
     required this.onEmployeeSelected,
+    required this.onEmployeeSaved,
+    required this.onUnitAssignmentAdded,
     super.key,
   });
 
   final List<Employee> employees;
+  final List<UnitAssignment> unitAssignments;
   final Unit selectedUnit;
   final Employee selectedEmployee;
+  final Unit Function(Employee employee, DateTime date) effectiveUnitForDate;
   final ValueChanged<Unit> onUnitSelected;
   final ValueChanged<Employee> onEmployeeSelected;
+  final ValueChanged<Employee> onEmployeeSaved;
+  final ValueChanged<UnitAssignment> onUnitAssignmentAdded;
 
   @override
   Widget build(BuildContext context) {
+    final today = DateTime.now();
     final filteredEmployees = selectedUnit == Unit.geral
         ? employees
         : employees.where((employee) {
-            return employee.unit == selectedUnit;
+            return effectiveUnitForDate(employee, today) == selectedUnit;
           }).toList();
     final filterLabel = selectedUnit == Unit.geral
         ? 'todos os colaboradores'
@@ -1134,6 +1230,16 @@ class EmployeesPage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
+        EmployeeEditorPanel(
+          employee: selectedEmployee,
+          effectiveUnit: effectiveUnitForDate(selectedEmployee, today),
+          assignments: unitAssignments.where((assignment) {
+            return assignment.employeeId == selectedEmployee.id;
+          }).toList(),
+          onEmployeeSaved: onEmployeeSaved,
+          onUnitAssignmentAdded: onUnitAssignmentAdded,
+        ),
+        const SizedBox(height: 16),
         Text(
           '$countLabel em $filterLabel',
           style: const TextStyle(
@@ -1145,6 +1251,7 @@ class EmployeesPage extends StatelessWidget {
         for (final employee in filteredEmployees)
           EmployeeRow(
             employee: employee,
+            effectiveUnit: effectiveUnitForDate(employee, today),
             selected: employee.id == selectedEmployee.id,
             onTap: () => onEmployeeSelected(employee),
           ),
@@ -1153,15 +1260,262 @@ class EmployeesPage extends StatelessWidget {
   }
 }
 
+class EmployeeEditorPanel extends StatefulWidget {
+  const EmployeeEditorPanel({
+    required this.employee,
+    required this.effectiveUnit,
+    required this.assignments,
+    required this.onEmployeeSaved,
+    required this.onUnitAssignmentAdded,
+    super.key,
+  });
+
+  final Employee employee;
+  final Unit effectiveUnit;
+  final List<UnitAssignment> assignments;
+  final ValueChanged<Employee> onEmployeeSaved;
+  final ValueChanged<UnitAssignment> onUnitAssignmentAdded;
+
+  @override
+  State<EmployeeEditorPanel> createState() => _EmployeeEditorPanelState();
+}
+
+class _EmployeeEditorPanelState extends State<EmployeeEditorPanel> {
+  late final TextEditingController _nameController;
+  late Unit _baseUnit;
+  late Unit _temporaryUnit;
+  var _assignmentDate = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.employee.name);
+    _baseUnit = widget.employee.unit;
+    _temporaryUnit = widget.effectiveUnit;
+  }
+
+  @override
+  void didUpdateWidget(EmployeeEditorPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.employee.id != widget.employee.id) {
+      _nameController.text = widget.employee.name;
+      _baseUnit = widget.employee.unit;
+      _temporaryUnit = widget.effectiveUnit;
+      _assignmentDate = DateTime.now();
+      return;
+    }
+
+    if (oldWidget.employee != widget.employee) {
+      _nameController.text = widget.employee.name;
+      _baseUnit = widget.employee.unit;
+    }
+    if (oldWidget.effectiveUnit != widget.effectiveUnit) {
+      _temporaryUnit = widget.effectiveUnit;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickAssignmentDate() async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _assignmentDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+    );
+
+    if (selected != null) {
+      setState(() => _assignmentDate = selected);
+    }
+  }
+
+  void _saveEmployee() {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      return;
+    }
+
+    widget.onEmployeeSaved(
+      widget.employee.copyWith(name: name, unit: _baseUnit),
+    );
+  }
+
+  void _launchTemporaryUnit() {
+    widget.onUnitAssignmentAdded(
+      UnitAssignment(
+        id: 'unit-${DateTime.now().microsecondsSinceEpoch}',
+        employeeId: widget.employee.id,
+        date: DateTime(
+          _assignmentDate.year,
+          _assignmentDate.month,
+          _assignmentDate.day,
+        ),
+        unit: _temporaryUnit,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final history = [...widget.assignments]
+      ..sort((a, b) => b.date.compareTo(a.date));
+
+    return SectionPanel(
+      title: 'Cadastro do colaborador',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ResponsiveGrid(
+            children: [
+              TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Nome do colaborador',
+                ),
+              ),
+              DropdownButtonFormField<Unit>(
+                value: _baseUnit,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Banca de cadastro',
+                ),
+                items: Unit.values
+                    .where((unit) => unit != Unit.geral)
+                    .map(
+                      (unit) => DropdownMenuItem(
+                        value: unit,
+                        child: Text(unit.label),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (unit) {
+                  if (unit != null) {
+                    setState(() => _baseUnit = unit);
+                  }
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: _saveEmployee,
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('Salvar cadastro'),
+            ),
+          ),
+          const Divider(height: 28),
+          Text(
+            'Banca efetiva hoje: ${widget.effectiveUnit.label}',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          ResponsiveGrid(
+            children: [
+              DropdownButtonFormField<Unit>(
+                value: _temporaryUnit,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Banca temporária',
+                ),
+                items: Unit.values
+                    .where((unit) => unit != Unit.geral)
+                    .map(
+                      (unit) => DropdownMenuItem(
+                        value: unit,
+                        child: Text(unit.label),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (unit) {
+                  if (unit != null) {
+                    setState(() => _temporaryUnit = unit);
+                  }
+                },
+              ),
+              OutlinedButton.icon(
+                onPressed: _pickAssignmentDate,
+                icon: const Icon(Icons.calendar_month_outlined),
+                label: Text(formatDate(_assignmentDate)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: _launchTemporaryUnit,
+              icon: const Icon(Icons.sync_alt_outlined),
+              label: const Text('Lançar banca temporária'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (history.isEmpty)
+            const Text(
+              'Nenhuma alteração temporária lançada.',
+              style: TextStyle(color: Color(0xFF5E6762)),
+            )
+          else
+            Column(
+              children: [
+                for (final assignment in history)
+                  UnitAssignmentRow(assignment: assignment),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class UnitAssignmentRow extends StatelessWidget {
+  const UnitAssignmentRow({required this.assignment, super.key});
+
+  final UnitAssignment assignment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F7F4),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE1E5DF)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.history_outlined, color: Color(0xFF245B57)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '${formatDate(assignment.date)} - ${assignment.unit.label}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class EmployeeRow extends StatelessWidget {
   const EmployeeRow({
     required this.employee,
+    required this.effectiveUnit,
     required this.selected,
     required this.onTap,
     super.key,
   });
 
   final Employee employee;
+  final Unit effectiveUnit;
   final bool selected;
   final VoidCallback onTap;
 
@@ -1193,7 +1547,12 @@ class EmployeeRow extends StatelessWidget {
                         employee.name,
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
-                      Text(employee.unit.label),
+                      Text('Banca atual: ${effectiveUnit.label}'),
+                      if (employee.unit != effectiveUnit)
+                        Text(
+                          'Cadastro: ${employee.unit.label}',
+                          style: const TextStyle(color: Color(0xFF5E6762)),
+                        ),
                     ],
                   ),
                 ),
@@ -1229,6 +1588,7 @@ class StatementPage extends StatelessWidget {
     required this.onChanged,
     required this.onUnitSelected,
     required this.onEmployeeSelected,
+    required this.effectiveUnitForDate,
     required this.onCashClosingAdded,
     super.key,
   });
@@ -1242,6 +1602,7 @@ class StatementPage extends StatelessWidget {
   final ValueChanged<MonthlyStatement> onChanged;
   final ValueChanged<Unit> onUnitSelected;
   final ValueChanged<Employee> onEmployeeSelected;
+  final Unit Function(Employee employee, DateTime date) effectiveUnitForDate;
   final ValueChanged<CashClosingEntry> onCashClosingAdded;
 
   @override
@@ -1366,6 +1727,7 @@ class StatementPage extends StatelessWidget {
           selectedEmployee: selectedEmployee,
           onUnitSelected: onUnitSelected,
           onEmployeeSelected: onEmployeeSelected,
+          effectiveUnitForDate: effectiveUnitForDate,
           onEntryAdded: onCashClosingAdded,
           embedded: true,
         ),
@@ -1382,6 +1744,7 @@ class CashClosingPage extends StatefulWidget {
     required this.selectedEmployee,
     required this.onUnitSelected,
     required this.onEmployeeSelected,
+    required this.effectiveUnitForDate,
     required this.onEntryAdded,
     this.embedded = false,
     super.key,
@@ -1393,6 +1756,7 @@ class CashClosingPage extends StatefulWidget {
   final Employee selectedEmployee;
   final ValueChanged<Unit> onUnitSelected;
   final ValueChanged<Employee> onEmployeeSelected;
+  final Unit Function(Employee employee, DateTime date) effectiveUnitForDate;
   final ValueChanged<CashClosingEntry> onEntryAdded;
   final bool embedded;
 
@@ -1491,12 +1855,13 @@ class _CashClosingPageState extends State<CashClosingPage> {
 
     final description = _descriptionController.text.trim();
     final entryEmployee = widget.selectedEmployee;
+    final entryUnit = widget.effectiveUnitForDate(entryEmployee, _date);
     widget.onEntryAdded(
       CashClosingEntry(
         id: 'cx-${DateTime.now().microsecondsSinceEpoch}',
         date: _date,
-        unit: entryEmployee.unit,
-        employee: entryEmployee,
+        unit: entryUnit,
+        employee: entryEmployee.copyWith(unit: entryUnit),
         type: _type,
         amount: _amount,
         description: description.isEmpty ? 'Fechamento de caixa' : description,

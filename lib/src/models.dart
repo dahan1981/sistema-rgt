@@ -34,6 +34,39 @@ class Employee {
   final String id;
   final String name;
   final Unit unit;
+
+  Employee copyWith({
+    String? name,
+    Unit? unit,
+  }) {
+    return Employee(
+      id: id,
+      name: name ?? this.name,
+      unit: unit ?? this.unit,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is Employee && other.id == id;
+  }
+
+  @override
+  int get hashCode => id.hashCode;
+}
+
+class UnitAssignment {
+  const UnitAssignment({
+    required this.id,
+    required this.employeeId,
+    required this.date,
+    required this.unit,
+  });
+
+  final String id;
+  final String employeeId;
+  final DateTime date;
+  final Unit unit;
 }
 
 class CashEntry {

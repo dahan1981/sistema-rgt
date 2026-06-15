@@ -82,6 +82,7 @@ void main() {
             selectedEmployee: sampleEmployees.first,
             onUnitSelected: (_) {},
             onEmployeeSelected: (_) {},
+            effectiveUnitForDate: (employee, _) => employee.unit,
             onEntryAdded: (_) {},
           ),
         ),
@@ -102,17 +103,28 @@ void main() {
         home: Scaffold(
           body: EmployeesPage(
             employees: sampleEmployees,
+            unitAssignments: const [],
             selectedUnit: Unit.geral,
             selectedEmployee: sampleEmployees.first,
+            effectiveUnitForDate: (employee, _) => employee.unit,
             onUnitSelected: (_) {},
             onEmployeeSelected: (_) {},
+            onEmployeeSaved: (_) {},
+            onUnitAssignmentAdded: (_) {},
           ),
         ),
       ),
     );
 
+    await tester.scrollUntilVisible(
+      find.text('8 colaboradores em todos os colaboradores'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(
-        find.text('8 colaboradores em todos os colaboradores'), findsOneWidget);
+      find.text('8 colaboradores em todos os colaboradores'),
+      findsOneWidget,
+    );
     expect(find.text('Ana Carolina Martins'), findsWidgets);
     await tester.scrollUntilVisible(
       find.text('Gabriel Souza'),
@@ -122,18 +134,61 @@ void main() {
     expect(find.text('Gabriel Souza'), findsOneWidget);
   });
 
+  testWidgets('collaborator page exposes editing and temporary unit history',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: EmployeesPage(
+            employees: sampleEmployees,
+            unitAssignments: [
+              UnitAssignment(
+                id: 'temp-1',
+                employeeId: sampleEmployees.first.id,
+                date: DateTime(2026, 6, 15),
+                unit: Unit.ktt1,
+              ),
+            ],
+            selectedUnit: Unit.geral,
+            selectedEmployee: sampleEmployees.first,
+            effectiveUnitForDate: (employee, _) {
+              return employee.id == sampleEmployees.first.id
+                  ? Unit.ktt1
+                  : employee.unit;
+            },
+            onUnitSelected: (_) {},
+            onEmployeeSelected: (_) {},
+            onEmployeeSaved: (_) {},
+            onUnitAssignmentAdded: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Cadastro do colaborador'), findsOneWidget);
+    expect(find.text('Nome do colaborador'), findsOneWidget);
+    expect(find.text('Banca efetiva hoje: KTT1'), findsOneWidget);
+    expect(find.text('Lançar banca temporária'), findsOneWidget);
+    expect(find.text('15/06/2026 - KTT1'), findsOneWidget);
+  });
+
   testWidgets('selecting collaborator explains monthly navigation',
       (tester) async {
     await tester.pumpWidget(const SistemaRgtApp());
 
     await tester.tap(find.text('Equipe'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Ana Carolina Martins').last);
+    await tester.scrollUntilVisible(
+      find.text('Bruno Silva Rocha'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Bruno Silva Rocha').last);
     await tester.pumpAndSettle();
 
     expect(find.text('Demonstrativo mensal'), findsOneWidget);
     expect(
-      find.text('Demonstrativo mensal aberto para Ana Carolina Martins.'),
+      find.text('Demonstrativo mensal aberto para Bruno Silva Rocha.'),
       findsOneWidget,
     );
   });

@@ -7,6 +7,7 @@ class RgtCalculator {
     MonthlyStatement statement, {
     List<CashClosingEntry> cashClosings = const [],
     DateTime? today,
+    bool restrictCashClosingsToStatementUnit = true,
   }) {
     final negativeCash = statement.negativeCashEntries.fold<double>(
       0,
@@ -14,7 +15,8 @@ class RgtCalculator {
     );
     final closingSummary = calculateCashClosingSummary(
       cashClosings,
-      unit: statement.employee.unit,
+      unit:
+          restrictCashClosingsToStatementUnit ? statement.employee.unit : null,
       employee: statement.employee,
       today: today,
     );
@@ -44,7 +46,7 @@ class RgtCalculator {
 
   CashClosingSummary calculateCashClosingSummary(
     List<CashClosingEntry> entries, {
-    required Unit unit,
+    Unit? unit,
     required Employee employee,
     DateTime? today,
   }) {
@@ -57,8 +59,8 @@ class RgtCalculator {
       final sameMonth = entry.date.year == currentDate.year &&
           entry.date.month == currentDate.month;
       final untilToday = !entry.date.isAfter(currentDate);
-      final sameContext =
-          entry.unit == unit && entry.employee.id == employee.id;
+      final sameContext = entry.employee.id == employee.id &&
+          (unit == null || entry.unit == unit);
 
       if (!sameMonth || !untilToday || !sameContext) {
         continue;

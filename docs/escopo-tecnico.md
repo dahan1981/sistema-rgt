@@ -6,8 +6,8 @@ Este documento traduz o PDF de demonstrativo mensal em módulos de aplicativo.
 
 - Painel global por banca/unidade, com filtros de banca e colaborador, e métricas consolidadas.
 - Autenticação e permissões por perfil.
-- Cadastro de colaboradores.
-- Vínculo do colaborador com unidade.
+- Cadastro editável de colaboradores.
+- Vínculo do colaborador com unidade, com histórico de alterações temporárias de banca por data.
 - Demonstrativo mensal por colaborador, com lançamento de fechamento de caixa na mesma tela.
 - Lançamento de vales, faltas com data para histórico, incentivos e bonificações.
 - Controle de caixa positivo e negativo com data e descrição.
@@ -52,6 +52,8 @@ O RH deve conseguir lançar caixas positivos e negativos informando:
 - Valor.
 - Descrição.
 - Para caixa negativo, se deve descontar de folha salarial.
+
+A banca do caixa deve ser resolvida pela banca efetiva do colaborador na data do lançamento. Se existir alteração temporária cadastrada para aquela data, o caixa fica vinculado à banca temporária; caso contrário, usa a banca de cadastro.
 
 A página de fechamento mostra o total mensal até a data vigente, respeitando o filtro atual de unidade e colaborador.
 
