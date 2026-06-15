@@ -48,6 +48,16 @@ class CashEntry {
   final double amount;
 }
 
+class AbsenceEntry {
+  const AbsenceEntry({
+    required this.date,
+    required this.asExpense,
+  });
+
+  final DateTime date;
+  final bool asExpense;
+}
+
 enum CashClosingType {
   positive('Caixa positivo'),
   negative('Caixa negativo');
@@ -118,8 +128,7 @@ class MonthlyStatement {
     required this.referenceMonth,
     required this.salaryForecast,
     required this.vouchers,
-    required this.absenceDates,
-    required this.discountAbsencesAsExpense,
+    required this.absences,
     required this.attendanceScore,
     required this.incentive,
     required this.balanceBonus,
@@ -132,8 +141,7 @@ class MonthlyStatement {
   final DateTime referenceMonth;
   final double salaryForecast;
   final double vouchers;
-  final List<DateTime> absenceDates;
-  final bool discountAbsencesAsExpense;
+  final List<AbsenceEntry> absences;
   final int attendanceScore;
   final Incentive incentive;
   final double balanceBonus;
@@ -141,7 +149,9 @@ class MonthlyStatement {
   final List<CashEntry> negativeCashEntries;
   final bool launchNegativeCashAsExpense;
 
-  int get absences => absenceDates.length;
+  int get absenceCount => absences.length;
+  int get expenseAbsenceCount =>
+      absences.where((absence) => absence.asExpense).length;
 }
 
 class FinancialSummary {

@@ -171,6 +171,8 @@ void main() {
     expect(find.text('1 falta registrada'), findsOneWidget);
     expect(find.text('10/06/2026'), findsOneWidget);
     expect(find.text('Lançar falta'), findsOneWidget);
+    expect(find.text('Lançar esta falta como despesa'), findsOneWidget);
+    expect(find.text('Despesa'), findsOneWidget);
   });
 
   testWidgets('opens report options with cash closing choices', (tester) async {

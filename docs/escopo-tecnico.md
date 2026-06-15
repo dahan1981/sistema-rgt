@@ -39,7 +39,7 @@ despesas = vales + desconto por faltas + caixa negativo
 passivo final = previsão salarial + receitas - despesas
 ```
 
-O desconto por faltas usa `previsão salarial / 30 * quantidade de faltas registradas` quando a opção de lançar faltas como despesa está ativa.
+O desconto por faltas usa `previsão salarial / 30 * quantidade de faltas marcadas como despesa`. Cada falta registrada deve permitir escolher individualmente se entra ou não como despesa.
 
 ## Fechamento de caixa no demonstrativo mensal
 

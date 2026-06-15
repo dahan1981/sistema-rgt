@@ -19,9 +19,8 @@ class RgtCalculator {
       today: today,
     );
 
-    final absenceDiscount = statement.discountAbsencesAsExpense
-        ? statement.salaryForecast / 30 * statement.absences
-        : 0.0;
+    final absenceDiscount =
+        statement.salaryForecast / 30 * statement.expenseAbsenceCount;
 
     final revenues = statement.incentive.amount +
         (statement.launchBalanceBonusAsRevenue ? statement.balanceBonus : 0) +

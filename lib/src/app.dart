@@ -1275,16 +1275,9 @@ class StatementPage extends StatelessWidget {
                     ),
                   ),
                   AbsenceHistoryField(
-                    dates: statement.absenceDates,
-                    onChanged: (dates) => onChanged(
-                      statement.copyWith(absenceDates: dates),
-                    ),
-                  ),
-                  SwitchRow(
-                    label: 'Lançar faltas como despesa',
-                    value: statement.discountAbsencesAsExpense,
-                    onChanged: (value) => onChanged(
-                      statement.copyWith(discountAbsencesAsExpense: value),
+                    absences: statement.absences,
+                    onChanged: (absences) => onChanged(
+                      statement.copyWith(absences: absences),
                     ),
                   ),
                 ],
@@ -2041,13 +2034,13 @@ class RevenueToggleField extends StatelessWidget {
 
 class AbsenceHistoryField extends StatefulWidget {
   const AbsenceHistoryField({
-    required this.dates,
+    required this.absences,
     required this.onChanged,
     super.key,
   });
 
-  final List<DateTime> dates;
-  final ValueChanged<List<DateTime>> onChanged;
+  final List<AbsenceEntry> absences;
+  final ValueChanged<List<AbsenceEntry>> onChanged;
 
   @override
   State<AbsenceHistoryField> createState() => _AbsenceHistoryFieldState();
@@ -2055,6 +2048,7 @@ class AbsenceHistoryField extends StatefulWidget {
 
 class _AbsenceHistoryFieldState extends State<AbsenceHistoryField> {
   late DateTime _selectedDate = _today();
+  var _asExpense = true;
 
   DateTime _today() {
     final now = DateTime.now();
@@ -2082,21 +2076,37 @@ class _AbsenceHistoryFieldState extends State<AbsenceHistoryField> {
       return;
     }
 
-    final updated = [...widget.dates, _selectedDate]
-      ..sort((a, b) => a.compareTo(b));
+    final updated = [
+      ...widget.absences,
+      AbsenceEntry(date: _selectedDate, asExpense: _asExpense),
+    ]..sort((a, b) => a.date.compareTo(b.date));
     widget.onChanged(updated);
   }
 
   bool get _selectedDateExists {
-    return widget.dates.any((date) {
-      return date.year == _selectedDate.year &&
-          date.month == _selectedDate.month &&
-          date.day == _selectedDate.day;
+    return widget.absences.any((absence) {
+      return _sameDate(absence.date, _selectedDate);
     });
   }
 
-  void _removeDate(DateTime date) {
-    final updated = [...widget.dates]..remove(date);
+  bool _sameDate(DateTime first, DateTime second) {
+    return first.year == second.year &&
+        first.month == second.month &&
+        first.day == second.day;
+  }
+
+  void _removeAbsence(AbsenceEntry absence) {
+    final updated = [...widget.absences]..remove(absence);
+    widget.onChanged(updated);
+  }
+
+  void _toggleExpense(AbsenceEntry absence, bool asExpense) {
+    final updated = widget.absences.map((item) {
+      if (_sameDate(item.date, absence.date)) {
+        return AbsenceEntry(date: item.date, asExpense: asExpense);
+      }
+      return item;
+    }).toList();
     widget.onChanged(updated);
   }
 
@@ -2116,9 +2126,9 @@ class _AbsenceHistoryFieldState extends State<AbsenceHistoryField> {
             children: [
               Expanded(
                 child: Text(
-                  widget.dates.length == 1
+                  widget.absences.length == 1
                       ? '1 falta registrada'
-                      : '${widget.dates.length} faltas registradas',
+                      : '${widget.absences.length} faltas registradas',
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
@@ -2142,24 +2152,76 @@ class _AbsenceHistoryFieldState extends State<AbsenceHistoryField> {
               ),
             ],
           ),
+          SwitchRow(
+            label: 'Lançar esta falta como despesa',
+            value: _asExpense,
+            onChanged: (value) => setState(() => _asExpense = value),
+          ),
           const SizedBox(height: 12),
-          if (widget.dates.isEmpty)
+          if (widget.absences.isEmpty)
             const Text(
               'Nenhuma falta lançada.',
               style: TextStyle(color: Color(0xFF5E6762)),
             )
           else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            Column(
               children: [
-                for (final date in widget.dates)
-                  InputChip(
-                    label: Text(formatDate(date)),
-                    onDeleted: () => _removeDate(date),
+                for (final absence in widget.absences)
+                  AbsenceRow(
+                    absence: absence,
+                    onExpenseChanged: (value) {
+                      _toggleExpense(absence, value);
+                    },
+                    onDelete: () => _removeAbsence(absence),
                   ),
               ],
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class AbsenceRow extends StatelessWidget {
+  const AbsenceRow({
+    required this.absence,
+    required this.onExpenseChanged,
+    required this.onDelete,
+    super.key,
+  });
+
+  final AbsenceEntry absence;
+  final ValueChanged<bool> onExpenseChanged;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F7F4),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE1E5DF)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              formatDate(absence.date),
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          const Text('Despesa'),
+          Switch(
+            value: absence.asExpense,
+            onChanged: onExpenseChanged,
+          ),
+          IconButton(
+            tooltip: 'Remover falta',
+            onPressed: onDelete,
+            icon: const Icon(Icons.close),
+          ),
         ],
       ),
     );
@@ -2314,8 +2376,7 @@ extension MonthlyStatementCopy on MonthlyStatement {
     DateTime? referenceMonth,
     double? salaryForecast,
     double? vouchers,
-    List<DateTime>? absenceDates,
-    bool? discountAbsencesAsExpense,
+    List<AbsenceEntry>? absences,
     int? attendanceScore,
     Incentive? incentive,
     double? balanceBonus,
@@ -2328,9 +2389,7 @@ extension MonthlyStatementCopy on MonthlyStatement {
       referenceMonth: referenceMonth ?? this.referenceMonth,
       salaryForecast: salaryForecast ?? this.salaryForecast,
       vouchers: vouchers ?? this.vouchers,
-      absenceDates: absenceDates ?? this.absenceDates,
-      discountAbsencesAsExpense:
-          discountAbsencesAsExpense ?? this.discountAbsencesAsExpense,
+      absences: absences ?? this.absences,
       attendanceScore: attendanceScore ?? this.attendanceScore,
       incentive: incentive ?? this.incentive,
       balanceBonus: balanceBonus ?? this.balanceBonus,
