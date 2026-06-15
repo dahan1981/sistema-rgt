@@ -1,8 +1,9 @@
 enum Unit {
-  adm('Administração'),
+  adm('ADM'),
   geral('Todos os colaboradores'),
-  largoDoMachado('LARGO DO MACHADO'),
-  laranj('LARANJ'),
+  geralBanca('Geral'),
+  largoDoMachado('Largo'),
+  laranj('Laranjeiras'),
   ktt1('KTT1'),
   ktt2('KTT2'),
   ktt3('KTT3'),

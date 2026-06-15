@@ -17,6 +17,17 @@ Este documento traduz o PDF de demonstrativo mensal em módulos de aplicativo.
 - Exportação futura de PDF e Excel.
 - Auditoria de alterações.
 
+## Base inicial de colaboradores
+
+- Laranjeiras: Daniele, Kethelyn.
+- Largo: Priscila, Flávia.
+- Geral: Denis.
+- KTT1: Anna, Rafaela.
+- KTT2: Patrick, Breno, Danilo.
+- KTT3: Cainã, Gabriela.
+- KTT4: Brenda, Dimas, Brendel.
+- ADM: Luiz, Fabiana, Wesley, Jean, João, Nise, Thais.
+
 ## Relatórios
 
 Ao iniciar a geração de relatório, o RH deve escolher em uma caixa de seleção

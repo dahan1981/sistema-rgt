@@ -117,21 +117,21 @@ void main() {
     );
 
     await tester.scrollUntilVisible(
-      find.text('8 colaboradores em todos os colaboradores'),
+      find.text('22 colaboradores em todos os colaboradores'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
     expect(
-      find.text('8 colaboradores em todos os colaboradores'),
+      find.text('22 colaboradores em todos os colaboradores'),
       findsOneWidget,
     );
-    expect(find.text('Ana Carolina Martins'), findsWidgets);
+    expect(find.text('Daniele'), findsWidgets);
     await tester.scrollUntilVisible(
-      find.text('Gabriel Souza'),
+      find.text('Thais'),
       400,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('Gabriel Souza'), findsOneWidget);
+    expect(find.text('Thais'), findsOneWidget);
   });
 
   testWidgets('collaborator page exposes editing and temporary unit history',
@@ -179,16 +179,16 @@ void main() {
     await tester.tap(find.text('Equipe'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.text('Bruno Silva Rocha'),
+      find.text('Kethelyn'),
       500,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.text('Bruno Silva Rocha').last);
+    await tester.tap(find.text('Kethelyn').last);
     await tester.pumpAndSettle();
 
     expect(find.text('Demonstrativo mensal'), findsOneWidget);
     expect(
-      find.text('Demonstrativo mensal aberto para Bruno Silva Rocha.'),
+      find.text('Demonstrativo mensal aberto para Kethelyn.'),
       findsOneWidget,
     );
   });
@@ -238,8 +238,8 @@ void main() {
 
     expect(find.text('Gerar relatório'), findsOneWidget);
     expect(find.text('Todos os colaboradores'), findsWidgets);
-    expect(find.text('Ana Carolina Martins'), findsWidgets);
-    expect(find.text('Bruno Silva Rocha'), findsWidgets);
+    expect(find.text('Daniele'), findsWidgets);
+    expect(find.text('Kethelyn'), findsWidgets);
     expect(find.text('Fechamento de caixa geral'), findsOneWidget);
     expect(find.text('Fechamento de caixa por colaborador'), findsOneWidget);
     expect(find.text('Preparar relatório'), findsOneWidget);
