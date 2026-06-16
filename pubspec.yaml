@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_svg: ^2.2.3
   http: ^1.6.0
   package_info_plus: ^10.1.0
   supabase_flutter: ^2.15.0
@@ -21,3 +22,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/brand/logo-banca.png
+    - assets/brand/logo-banca.svg

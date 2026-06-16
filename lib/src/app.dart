@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'calculator.dart';
@@ -9,6 +10,8 @@ import 'sample_data.dart';
 import 'supabase_config.dart';
 import 'supabase_repository.dart';
 import 'update_checker.dart';
+
+const _brandLogoSvg = 'assets/brand/logo-banca.svg';
 
 class SistemaRgtApp extends StatelessWidget {
   const SistemaRgtApp({super.key});
@@ -740,23 +743,7 @@ class AppHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
       child: Row(
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: const Color(0xFF245B57),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Text(
-              'RGT',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
+          const BrandMark(size: 42),
           const SizedBox(width: 14),
           const Expanded(
             child: Column(
@@ -779,6 +766,32 @@ class AppHeader extends StatelessWidget {
             icon: const Icon(Icons.picture_as_pdf_outlined),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class BrandMark extends StatelessWidget {
+  const BrandMark({this.size = 42, super.key});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      padding: EdgeInsets.all(size * 0.12),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE1E5DF)),
+      ),
+      child: SvgPicture.asset(
+        _brandLogoSvg,
+        fit: BoxFit.contain,
+        semanticsLabel: 'Logo Banca',
       ),
     );
   }
@@ -1044,13 +1057,19 @@ class RgtSideNav extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'RGT RH',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
+          const Row(
+            children: [
+              BrandMark(size: 36),
+              SizedBox(width: 10),
+              Text(
+                'RGT RH',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 28),
           NavButton(
