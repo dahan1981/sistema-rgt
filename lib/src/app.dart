@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'calculator.dart';
 import 'models.dart';
 import 'sample_data.dart';
 import 'supabase_config.dart';
+import 'supabase_repository.dart';
 
 class SistemaRgtApp extends StatelessWidget {
   const SistemaRgtApp({super.key});
@@ -22,7 +26,169 @@ class SistemaRgtApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFF6F7F4),
         fontFamily: 'Arial',
       ),
-      home: const RgtHomePage(),
+      home: const AuthGate(child: RgtHomePage()),
+    );
+  }
+}
+
+class AuthGate extends StatefulWidget {
+  const AuthGate({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  User? _user;
+  StreamSubscription<AuthState>? _authSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!SupabaseConfig.isConfigured) {
+      return;
+    }
+
+    _user = Supabase.instance.client.auth.currentUser;
+    _authSubscription =
+        Supabase.instance.client.auth.onAuthStateChange.listen((state) {
+      if (mounted) {
+        setState(() => _user = state.session?.user);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!SupabaseConfig.isConfigured || _user != null) {
+      return widget.child;
+    }
+
+    return const LoginPage();
+  }
+}
+
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  var _isSubmitting = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _signIn() async {
+    setState(() {
+      _isSubmitting = true;
+      _error = null;
+    });
+
+    try {
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+    } on AuthException catch (error) {
+      setState(() => _error = error.message);
+    } catch (_) {
+      setState(() => _error = 'Não foi possível autenticar no Supabase.');
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Card(
+            margin: const EdgeInsets.all(24),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Acesso RGT RH',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Entre com o usuário autorizado para registrar lançamentos com auditoria.',
+                    style: TextStyle(color: Color(0xFF5E6762)),
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'E-mail',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Senha',
+                    ),
+                    onSubmitted: (_) {
+                      if (!_isSubmitting) {
+                        unawaited(_signIn());
+                      }
+                    },
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      _error!,
+                      style: const TextStyle(color: Color(0xFF9A1D24)),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: _isSubmitting ? null : _signIn,
+                    icon: _isSubmitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.login_outlined),
+                    label: const Text('Entrar'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -36,6 +202,7 @@ class RgtHomePage extends StatefulWidget {
 
 class _RgtHomePageState extends State<RgtHomePage> {
   final _calculator = const RgtCalculator();
+  SupabaseRepository? _repository;
   var _selectedIndex = 0;
   late List<Employee> _employees = [...sampleEmployees];
   late Employee _selectedEmployee = _employees.first;
@@ -47,14 +214,100 @@ class _RgtHomePageState extends State<RgtHomePage> {
     ...sampleCashClosings,
   ];
   late MonthlyStatement _statement = _statementFor(_selectedEmployee);
+  var _isLoadingRemoteData = false;
+  String? _syncStatus;
+
+  @override
+  void initState() {
+    super.initState();
+
+    if (SupabaseConfig.isConfigured) {
+      _repository = SupabaseRepository();
+      if (_repository!.canPersist) {
+        unawaited(_loadRemoteData());
+      }
+    }
+  }
+
+  Future<void> _loadRemoteData() async {
+    final repository = _repository;
+    if (repository == null || !repository.canPersist) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingRemoteData = true;
+      _syncStatus = 'Sincronizando Supabase...';
+    });
+
+    try {
+      final snapshot = await repository.fetchSnapshot();
+      final selectedEmployee =
+          snapshot.employees.isEmpty ? _selectedEmployee : snapshot.employees.first;
+      final statement = await repository.fetchStatement(
+        _employeeWithEffectiveUnitFrom(
+          selectedEmployee,
+          DateTime.now(),
+          snapshot.unitAssignments,
+        ),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        if (snapshot.employees.isNotEmpty) {
+          _employees = snapshot.employees;
+          _selectedEmployee = selectedEmployee;
+          _selectedUnit =
+              _effectiveUnitForFrom(selectedEmployee, DateTime.now(), snapshot.unitAssignments);
+        }
+        _unitAssignments
+          ..clear()
+          ..addAll(snapshot.unitAssignments);
+        _cashClosings
+          ..clear()
+          ..addAll(snapshot.cashClosings);
+        _statement = statement;
+        _syncStatus = 'Supabase sincronizado';
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _syncStatus = 'Supabase indisponível');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingRemoteData = false);
+      }
+    }
+  }
 
   Employee _employeeWithEffectiveUnit(Employee employee, DateTime date) {
     return employee.copyWith(unit: _effectiveUnitFor(employee, date));
   }
 
+  Employee _employeeWithEffectiveUnitFrom(
+    Employee employee,
+    DateTime date,
+    List<UnitAssignment> assignments,
+  ) {
+    return employee.copyWith(
+      unit: _effectiveUnitForFrom(employee, date, assignments),
+    );
+  }
+
   Unit _effectiveUnitFor(Employee employee, DateTime date) {
+    return _effectiveUnitForFrom(employee, date, _unitAssignments);
+  }
+
+  Unit _effectiveUnitForFrom(
+    Employee employee,
+    DateTime date,
+    List<UnitAssignment> assignmentsSource,
+  ) {
     final normalized = DateTime(date.year, date.month, date.day);
-    final assignments = _unitAssignments.where((assignment) {
+    final assignments = assignmentsSource.where((assignment) {
       return assignment.employeeId == employee.id &&
           _sameDay(assignment.date, normalized);
     }).toList();
@@ -97,9 +350,29 @@ class _RgtHomePageState extends State<RgtHomePage> {
       _statement = _statementFor(currentEmployee);
       _selectedIndex = 2;
     });
+    unawaited(_loadStatement(currentEmployee));
     _showTabFeedback(
       'Demonstrativo mensal aberto para ${currentEmployee.name}.',
     );
+  }
+
+  Future<void> _loadStatement(Employee employee) async {
+    final repository = _repository;
+    if (repository == null || !repository.canPersist) {
+      return;
+    }
+
+    try {
+      final effectiveEmployee = _employeeWithEffectiveUnit(employee, DateTime.now());
+      final statement = await repository.fetchStatement(effectiveEmployee);
+      if (mounted && _selectedEmployee.id == employee.id) {
+        setState(() => _statement = statement);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _syncStatus = 'Falha ao carregar demonstrativo');
+      }
+    }
   }
 
   void _selectUnit(Unit unit) {
@@ -129,6 +402,7 @@ class _RgtHomePageState extends State<RgtHomePage> {
     setState(() {
       _cashClosings.insert(0, entry);
     });
+    unawaited(_persist((repository) => repository.addCashClosing(entry)));
   }
 
   void _updateEmployee(Employee updatedEmployee) {
@@ -144,6 +418,7 @@ class _RgtHomePageState extends State<RgtHomePage> {
         );
       }
     });
+    unawaited(_persist((repository) => repository.saveEmployee(updatedEmployee)));
   }
 
   void _addUnitAssignment(UnitAssignment assignment) {
@@ -157,6 +432,34 @@ class _RgtHomePageState extends State<RgtHomePage> {
         );
       }
     });
+    unawaited(
+      _persist((repository) => repository.addUnitAssignment(assignment)),
+    );
+  }
+
+  void _changeStatement(MonthlyStatement statement) {
+    setState(() => _statement = statement);
+    unawaited(_persist((repository) => repository.saveStatement(statement)));
+  }
+
+  Future<void> _persist(
+    Future<void> Function(SupabaseRepository repository) operation,
+  ) async {
+    final repository = _repository;
+    if (repository == null || !repository.canPersist) {
+      return;
+    }
+
+    try {
+      await operation(repository);
+      if (mounted) {
+        setState(() => _syncStatus = 'Alteração salva no Supabase');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _syncStatus = 'Falha ao salvar no Supabase');
+      }
+    }
   }
 
   void _setSelectedIndex(int index) {
@@ -267,7 +570,7 @@ class _RgtHomePageState extends State<RgtHomePage> {
           _selectedEmployee,
           DateTime.now(),
         ),
-        onChanged: (statement) => setState(() => _statement = statement),
+        onChanged: _changeStatement,
         onEmployeeSelected: (employee) {
           final currentEmployee = _currentEmployeeById(employee.id);
           setState(() {
@@ -275,6 +578,7 @@ class _RgtHomePageState extends State<RgtHomePage> {
             _selectedUnit = _effectiveUnitFor(currentEmployee, DateTime.now());
             _statement = _statementFor(currentEmployee);
           });
+          unawaited(_loadStatement(currentEmployee));
         },
         onUnitSelected: _selectUnit,
         effectiveUnitForDate: (employee, date) {
@@ -291,6 +595,12 @@ class _RgtHomePageState extends State<RgtHomePage> {
             RgtSideNav(
               selectedIndex: _selectedIndex,
               onChanged: _setSelectedIndex,
+              statusLabel: _isLoadingRemoteData
+                  ? 'Sincronizando Supabase...'
+                  : _syncStatus,
+              onSignOut: SupabaseConfig.isConfigured
+                  ? () => Supabase.instance.client.auth.signOut()
+                  : null,
             ),
           Expanded(
             child: SafeArea(
@@ -635,11 +945,15 @@ class RgtSideNav extends StatelessWidget {
   const RgtSideNav({
     required this.selectedIndex,
     required this.onChanged,
+    this.statusLabel,
+    this.onSignOut,
     super.key,
   });
 
   final int selectedIndex;
   final ValueChanged<int> onChanged;
+  final String? statusLabel;
+  final VoidCallback? onSignOut;
 
   @override
   Widget build(BuildContext context) {
@@ -678,10 +992,23 @@ class RgtSideNav extends StatelessWidget {
             onTap: () => onChanged(2),
           ),
           const Spacer(),
+          if (onSignOut != null) ...[
+            TextButton.icon(
+              onPressed: onSignOut,
+              icon: const Icon(Icons.logout_outlined, size: 18),
+              label: const Text('Sair'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFB7C3BD),
+                alignment: Alignment.centerLeft,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           Text(
-            SupabaseConfig.isConfigured
-                ? 'Supabase conectado'
-                : 'Supabase pendente',
+            statusLabel ??
+                (SupabaseConfig.isConfigured
+                    ? 'Supabase conectado'
+                    : 'Supabase pendente'),
             style: const TextStyle(color: Color(0xFFB7C3BD), fontSize: 12),
           ),
         ],
@@ -753,7 +1080,7 @@ class _DashboardPageState extends State<DashboardPage> {
   final Map<Unit, Employee?> _selectedEmployeesByUnit = {};
 
   List<UnitDashboardSummary> get _unitSummaries {
-    final calculator = const RgtCalculator();
+    const calculator = RgtCalculator();
     final unitOptions = Unit.values.where((unit) => unit != Unit.geral);
     final units = widget.selectedUnitFilter == null
         ? unitOptions
@@ -914,7 +1241,7 @@ class DashboardHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = const PageTitle(
+    const title = PageTitle(
       title: 'Painel global',
       subtitle: 'Visão consolidada por banca e métricas do mês.',
     );
@@ -922,7 +1249,7 @@ class DashboardHeader extends StatelessWidget {
       width: 280,
       child: DropdownButtonFormField<Unit?>(
         isExpanded: true,
-        value: selectedUnitFilter,
+        initialValue: selectedUnitFilter,
         decoration: const InputDecoration(
           border: OutlineInputBorder(),
           labelText: 'Filtro de banca',
@@ -951,7 +1278,7 @@ class DashboardHeader extends StatelessWidget {
       width: 280,
       child: DropdownButtonFormField<Employee?>(
         isExpanded: true,
-        value: employeeOptions.contains(selectedEmployee)
+        initialValue: employeeOptions.contains(selectedEmployee)
             ? selectedEmployee
             : null,
         decoration: const InputDecoration(
@@ -992,7 +1319,7 @@ class DashboardHeader extends StatelessWidget {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: title),
+            const Expanded(child: title),
             const SizedBox(width: 16),
             filter,
             const SizedBox(width: 12),
@@ -1091,7 +1418,7 @@ class BancaMetricCard extends StatelessWidget {
             const SizedBox(height: 10),
             DropdownButtonFormField<Employee?>(
               isExpanded: true,
-              value: summary.selectedEmployee,
+              initialValue: summary.selectedEmployee,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
                 labelText: 'Colaborador',
@@ -1188,7 +1515,7 @@ class EmployeesPage extends StatelessWidget {
           child: ResponsiveGrid(
             children: [
               DropdownButtonFormField<Unit>(
-                value: selectedUnit,
+                initialValue: selectedUnit,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                   labelText: 'Unidade',
@@ -1208,7 +1535,7 @@ class EmployeesPage extends StatelessWidget {
                 },
               ),
               DropdownButtonFormField<Employee>(
-                value: filteredEmployees.contains(selectedEmployee)
+                initialValue: filteredEmployees.contains(selectedEmployee)
                     ? selectedEmployee
                     : filteredEmployees.first,
                 decoration: const InputDecoration(
@@ -1382,7 +1709,7 @@ class _EmployeeEditorPanelState extends State<EmployeeEditorPanel> {
                 ),
               ),
               DropdownButtonFormField<Unit>(
-                value: _baseUnit,
+                initialValue: _baseUnit,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                   labelText: 'Banca de cadastro',
@@ -1422,7 +1749,7 @@ class _EmployeeEditorPanelState extends State<EmployeeEditorPanel> {
           ResponsiveGrid(
             children: [
               DropdownButtonFormField<Unit>(
-                value: _temporaryUnit,
+                initialValue: _temporaryUnit,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                   labelText: 'Banca temporária',
@@ -1560,9 +1887,9 @@ class EmployeeRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Column(
+                const Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
-                  children: const [
+                  children: [
                     Icon(Icons.receipt_long_outlined),
                     SizedBox(height: 4),
                     Text(
@@ -1661,7 +1988,7 @@ class StatementPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   DropdownButtonFormField<Incentive>(
-                    value: statement.incentive,
+                    initialValue: statement.incentive,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       labelText: 'Pontuação de incentivo',
@@ -1931,7 +2258,7 @@ class _CashClosingPageState extends State<CashClosingPage> {
             child: Column(
               children: [
                 DropdownButtonFormField<Unit>(
-                  value: widget.selectedUnit,
+                  initialValue: widget.selectedUnit,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                     labelText: 'Unidade',
@@ -1952,7 +2279,7 @@ class _CashClosingPageState extends State<CashClosingPage> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<Employee?>(
-                  value: selectedEmployee,
+                  initialValue: selectedEmployee,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                     labelText: 'Colaborador',
