@@ -244,4 +244,20 @@ void main() {
     expect(find.text('Fechamento de caixa por colaborador'), findsOneWidget);
     expect(find.text('Preparar relatório'), findsOneWidget);
   });
+  testWidgets('login page exposes account creation fields', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: LoginPage(),
+      ),
+    );
+
+    await tester.tap(find.text('Não tenho conta de login'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nome'), findsOneWidget);
+    expect(find.text('Telefone'), findsOneWidget);
+    expect(find.text('CPF'), findsOneWidget);
+    expect(find.text('Confirmar senha'), findsOneWidget);
+    expect(find.text('Criar conta'), findsOneWidget);
+  });
 }

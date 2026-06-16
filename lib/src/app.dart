@@ -88,22 +88,41 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _cpfController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  var _isCreatingAccount = false;
   var _isSubmitting = false;
   String? _error;
+  String? _successMessage;
 
   @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
+    _cpfController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  void _toggleMode() {
+    setState(() {
+      _isCreatingAccount = !_isCreatingAccount;
+      _error = null;
+      _successMessage = null;
+    });
   }
 
   Future<void> _signIn() async {
     setState(() {
       _isSubmitting = true;
       _error = null;
+      _successMessage = null;
     });
 
     try {
@@ -122,17 +141,77 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  Future<void> _signUp() async {
+    final password = _passwordController.text;
+    final confirmation = _confirmPasswordController.text;
+
+    if (_nameController.text.trim().isEmpty ||
+        _emailController.text.trim().isEmpty ||
+        _phoneController.text.trim().isEmpty ||
+        _cpfController.text.trim().isEmpty ||
+        password.isEmpty ||
+        confirmation.isEmpty) {
+      setState(() => _error = 'Preencha todos os campos do cadastro.');
+      return;
+    }
+
+    if (password != confirmation) {
+      setState(() => _error = 'A senha e a confirmação de senha não conferem.');
+      return;
+    }
+
+    if (password.length < 6) {
+      setState(() => _error = 'A senha deve ter pelo menos 6 caracteres.');
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _error = null;
+      _successMessage = null;
+    });
+
+    try {
+      await Supabase.instance.client.auth.signUp(
+        email: _emailController.text.trim(),
+        password: password,
+        data: {
+          'name': _nameController.text.trim(),
+          'phone': _phoneController.text.trim(),
+          'cpf': _cpfController.text.trim(),
+        },
+      );
+
+      setState(() {
+        _successMessage =
+            'Cadastro criado. Confirme seu e-mail para liberar o acesso.';
+        _isCreatingAccount = false;
+        _confirmPasswordController.clear();
+      });
+    } on AuthException catch (error) {
+      setState(() => _error = error.message);
+    } catch (_) {
+      setState(() => _error = 'Não foi possível criar a conta no Supabase.');
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Card(
-            margin: const EdgeInsets.all(24),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: Card(
+              margin: const EdgeInsets.all(24),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -146,6 +225,17 @@ class _LoginPageState extends State<LoginPage> {
                     style: TextStyle(color: Color(0xFF5E6762)),
                   ),
                   const SizedBox(height: 20),
+                  if (_isCreatingAccount) ...[
+                    TextField(
+                      controller: _nameController,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'Nome',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   TextField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -154,6 +244,26 @@ class _LoginPageState extends State<LoginPage> {
                       labelText: 'E-mail',
                     ),
                   ),
+                  if (_isCreatingAccount) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'Telefone',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _cpfController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'CPF',
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   TextField(
                     controller: _passwordController,
@@ -163,11 +273,27 @@ class _LoginPageState extends State<LoginPage> {
                       labelText: 'Senha',
                     ),
                     onSubmitted: (_) {
-                      if (!_isSubmitting) {
+                      if (!_isSubmitting && !_isCreatingAccount) {
                         unawaited(_signIn());
                       }
                     },
                   ),
+                  if (_isCreatingAccount) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _confirmPasswordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'Confirmar senha',
+                      ),
+                      onSubmitted: (_) {
+                        if (!_isSubmitting) {
+                          unawaited(_signUp());
+                        }
+                      },
+                    ),
+                  ],
                   if (_error != null) ...[
                     const SizedBox(height: 12),
                     Text(
@@ -175,19 +301,42 @@ class _LoginPageState extends State<LoginPage> {
                       style: const TextStyle(color: Color(0xFF9A1D24)),
                     ),
                   ],
+                  if (_successMessage != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      _successMessage!,
+                      style: const TextStyle(color: Color(0xFF245B57)),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   FilledButton.icon(
-                    onPressed: _isSubmitting ? null : _signIn,
+                    onPressed: _isSubmitting
+                        ? null
+                        : (_isCreatingAccount ? _signUp : _signIn),
                     icon: _isSubmitting
                         ? const SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.login_outlined),
-                    label: const Text('Entrar'),
+                        : Icon(
+                            _isCreatingAccount
+                                ? Icons.person_add_alt_1_outlined
+                                : Icons.login_outlined,
+                          ),
+                    label: Text(_isCreatingAccount ? 'Criar conta' : 'Entrar'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _isSubmitting ? null : _toggleMode,
+                    child: Text(
+                      _isCreatingAccount
+                          ? 'Já tenho conta'
+                          : 'Não tenho conta de login',
+                    ),
                   ),
                 ],
+                ),
               ),
             ),
           ),
