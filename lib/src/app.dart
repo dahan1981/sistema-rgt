@@ -8,6 +8,7 @@ import 'models.dart';
 import 'sample_data.dart';
 import 'supabase_config.dart';
 import 'supabase_repository.dart';
+import 'update_checker.dart';
 
 class SistemaRgtApp extends StatelessWidget {
   const SistemaRgtApp({super.key});
@@ -193,6 +194,58 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
+class UpdateAvailableDialog extends StatelessWidget {
+  const UpdateAvailableDialog({
+    required this.update,
+    required this.onDownload,
+    super.key,
+  });
+
+  final UpdateInfo update;
+  final Future<void> Function() onDownload;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      icon: const Icon(Icons.system_update_alt_outlined),
+      title: const Text('Atualização disponível'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Versão instalada: ${update.currentVersion}\n'
+            'Nova versão: ${update.latestVersion}',
+          ),
+          if (update.notes.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(update.notes),
+          ],
+          if (update.mandatory) ...[
+            const SizedBox(height: 12),
+            const Text(
+              'Esta atualização é obrigatória para continuar usando a versão mais recente do sistema.',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        if (!update.mandatory)
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Depois'),
+          ),
+        FilledButton.icon(
+          onPressed: onDownload,
+          icon: const Icon(Icons.download_outlined),
+          label: const Text('Baixar atualização'),
+        ),
+      ],
+    );
+  }
+}
+
 class RgtHomePage extends StatefulWidget {
   const RgtHomePage({super.key});
 
@@ -202,6 +255,7 @@ class RgtHomePage extends StatefulWidget {
 
 class _RgtHomePageState extends State<RgtHomePage> {
   final _calculator = const RgtCalculator();
+  final _updateChecker = const UpdateChecker();
   SupabaseRepository? _repository;
   var _selectedIndex = 0;
   late List<Employee> _employees = [...sampleEmployees];
@@ -220,6 +274,9 @@ class _RgtHomePageState extends State<RgtHomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_checkForUpdates());
+    });
 
     if (SupabaseConfig.isConfigured) {
       _repository = SupabaseRepository();
@@ -227,6 +284,29 @@ class _RgtHomePageState extends State<RgtHomePage> {
         unawaited(_loadRemoteData());
       }
     }
+  }
+
+  Future<void> _checkForUpdates() async {
+    final update = await _updateChecker.check();
+    if (!mounted || update == null) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: !update.mandatory,
+      builder: (context) {
+        return UpdateAvailableDialog(
+          update: update,
+          onDownload: () async {
+            await _updateChecker.openDownload(update);
+            if (context.mounted && !update.mandatory) {
+              Navigator.of(context).pop();
+            }
+          },
+        );
+      },
+    );
   }
 
   Future<void> _loadRemoteData() async {

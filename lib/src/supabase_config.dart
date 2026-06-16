@@ -8,6 +8,10 @@ class SupabaseConfig {
     'SUPABASE_PUBLISHABLE_KEY',
   );
 
+  static const updateManifestUrl = String.fromEnvironment(
+    'UPDATE_MANIFEST_URL',
+  );
+
   static bool get isConfigured =>
       url.trim().isNotEmpty && publishableKey.trim().isNotEmpty;
 }

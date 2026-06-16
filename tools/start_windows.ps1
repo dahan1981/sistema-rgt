@@ -14,8 +14,13 @@ if ([string]::IsNullOrWhiteSpace($env:SUPABASE_URL)) {
   $env:SUPABASE_URL = "https://libpncdxxgwshnlxicbt.supabase.co"
 }
 
+if ([string]::IsNullOrWhiteSpace($env:UPDATE_MANIFEST_URL)) {
+  $env:UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/dahan1981/sistema-rgt/main/updates/latest.json"
+}
+
 $dartDefines = @(
-  "--dart-define=SUPABASE_URL=$($env:SUPABASE_URL)"
+  "--dart-define=SUPABASE_URL=$($env:SUPABASE_URL)",
+  "--dart-define=UPDATE_MANIFEST_URL=$($env:UPDATE_MANIFEST_URL)"
 )
 
 if (-not [string]::IsNullOrWhiteSpace($env:SUPABASE_PUBLISHABLE_KEY)) {
