@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'calculator.dart';
 import 'models.dart';
 import 'sample_data.dart';
+import 'supabase_config.dart';
 
 class SistemaRgtApp extends StatelessWidget {
   const SistemaRgtApp({super.key});
@@ -677,9 +678,11 @@ class RgtSideNav extends StatelessWidget {
             onTap: () => onChanged(2),
           ),
           const Spacer(),
-          const Text(
-            'Supabase pendente',
-            style: TextStyle(color: Color(0xFFB7C3BD), fontSize: 12),
+          Text(
+            SupabaseConfig.isConfigured
+                ? 'Supabase conectado'
+                : 'Supabase pendente',
+            style: const TextStyle(color: Color(0xFFB7C3BD), fontSize: 12),
           ),
         ],
       ),

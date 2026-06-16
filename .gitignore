@@ -29,3 +29,5 @@ windows/flutter/ephemeral/
 
 *.log
 *.tmp
+
+tools/start_windows.local.ps1

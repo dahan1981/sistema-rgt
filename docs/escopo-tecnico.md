@@ -73,6 +73,27 @@ Cada fechamento deve refletir no resumo financeiro do colaborador como
 Caixas negativos entram no saldo parcial; quando marcados para desconto em folha,
 também entram como despesa do demonstrativo mensal.
 
-## Integração Supabase futura
+## Integração Supabase
 
-As regras sensíveis devem migrar para SQL ou Edge Functions quando o Supabase for integrado. O app deve continuar mostrando o cálculo em tempo real, mas o valor oficial salvo e auditado deve vir do backend.
+O app Flutter usa somente a URL pública do projeto Supabase e a publishable key.
+A string PostgreSQL não deve ser colocada no aplicativo, pois ela carrega senha
+de banco e deve ficar restrita a scripts administrativos, migrações e ambiente
+seguro de backend.
+
+No Windows local, o arquivo ignorado pelo Git `tools/start_windows.local.ps1`
+define `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY` antes do build. Em outros
+ambientes, passe os mesmos valores via `--dart-define`.
+
+Quando for usar a URL PostgreSQL em ferramenta de banco, a senha precisa estar
+codificada na URL. Como a senha termina com `@`, esse caractere deve ser enviado
+como `%40`; caso contrário, o cliente interpreta o `@` como separador do host.
+
+Formato seguro para documentação:
+
+```text
+postgresql://postgres.<project-ref>:<senha-com-%40>@aws-1-us-west-2.pooler.supabase.com:6543/postgres
+```
+
+As regras sensíveis devem ficar em SQL ou Edge Functions. O app pode continuar
+mostrando o cálculo em tempo real, mas o valor oficial salvo e auditado deve vir
+do backend.
