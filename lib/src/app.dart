@@ -271,8 +271,6 @@ class _RgtHomePageState extends State<RgtHomePage> {
     ...sampleCashClosings,
   ];
   late MonthlyStatement _statement = _statementFor(_selectedEmployee);
-  var _isLoadingRemoteData = false;
-  String? _syncStatus;
 
   @override
   void initState() {
@@ -318,11 +316,6 @@ class _RgtHomePageState extends State<RgtHomePage> {
       return;
     }
 
-    setState(() {
-      _isLoadingRemoteData = true;
-      _syncStatus = 'Sincronizando Supabase...';
-    });
-
     try {
       final snapshot = await repository.fetchSnapshot();
       final selectedEmployee =
@@ -353,17 +346,8 @@ class _RgtHomePageState extends State<RgtHomePage> {
           ..clear()
           ..addAll(snapshot.cashClosings);
         _statement = statement;
-        _syncStatus = 'Supabase sincronizado';
       });
-    } catch (_) {
-      if (mounted) {
-        setState(() => _syncStatus = 'Supabase indisponível');
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoadingRemoteData = false);
-      }
-    }
+    } catch (_) {}
   }
 
   Employee _employeeWithEffectiveUnit(Employee employee, DateTime date) {
@@ -452,9 +436,7 @@ class _RgtHomePageState extends State<RgtHomePage> {
         setState(() => _statement = statement);
       }
     } catch (_) {
-      if (mounted) {
-        setState(() => _syncStatus = 'Falha ao carregar demonstrativo');
-      }
+      return;
     }
   }
 
@@ -535,13 +517,8 @@ class _RgtHomePageState extends State<RgtHomePage> {
 
     try {
       await operation(repository);
-      if (mounted) {
-        setState(() => _syncStatus = 'Alteração salva no Supabase');
-      }
     } catch (_) {
-      if (mounted) {
-        setState(() => _syncStatus = 'Falha ao salvar no Supabase');
-      }
+      return;
     }
   }
 
@@ -678,9 +655,6 @@ class _RgtHomePageState extends State<RgtHomePage> {
             RgtSideNav(
               selectedIndex: _selectedIndex,
               onChanged: _setSelectedIndex,
-              statusLabel: _isLoadingRemoteData
-                  ? 'Sincronizando Supabase...'
-                  : _syncStatus,
               onSignOut: SupabaseConfig.isConfigured
                   ? () => Supabase.instance.client.auth.signOut()
                   : null,
@@ -1038,14 +1012,12 @@ class RgtSideNav extends StatelessWidget {
   const RgtSideNav({
     required this.selectedIndex,
     required this.onChanged,
-    this.statusLabel,
     this.onSignOut,
     super.key,
   });
 
   final int selectedIndex;
   final ValueChanged<int> onChanged;
-  final String? statusLabel;
   final VoidCallback? onSignOut;
 
   @override
@@ -1101,15 +1073,7 @@ class RgtSideNav extends StatelessWidget {
                 alignment: Alignment.centerLeft,
               ),
             ),
-            const SizedBox(height: 8),
           ],
-          Text(
-            statusLabel ??
-                (SupabaseConfig.isConfigured
-                    ? 'Supabase conectado'
-                    : 'Supabase pendente'),
-            style: const TextStyle(color: Color(0xFFB7C3BD), fontSize: 12),
-          ),
         ],
       ),
     );
