@@ -398,6 +398,558 @@ class UpdateAvailableDialog extends StatelessWidget {
   }
 }
 
+class ProfilePage extends StatefulWidget {
+  const ProfilePage({super.key});
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _cpfController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  var _isSavingProfile = false;
+  var _isSendingReset = false;
+  var _isChangingEmail = false;
+  var _isChangingPassword = false;
+  String? _message;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _hydrateFromUser();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _cpfController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  User? get _user {
+    if (!SupabaseConfig.isConfigured) {
+      return null;
+    }
+    return Supabase.instance.client.auth.currentUser;
+  }
+
+  void _hydrateFromUser() {
+    final user = _user;
+    final metadata = user?.userMetadata ?? {};
+    _nameController.text = metadata['name']?.toString() ?? '';
+    _phoneController.text = metadata['phone']?.toString() ?? '';
+    _cpfController.text = metadata['cpf']?.toString() ?? '';
+    _emailController.text = user?.email ?? '';
+  }
+
+  void _setMessage(String message) {
+    setState(() {
+      _message = message;
+      _error = null;
+    });
+  }
+
+  void _setError(String message) {
+    setState(() {
+      _error = message;
+      _message = null;
+    });
+  }
+
+  Future<void> _saveProfile() async {
+    setState(() {
+      _isSavingProfile = true;
+      _message = null;
+      _error = null;
+    });
+
+    try {
+      await Supabase.instance.client.auth.updateUser(
+        UserAttributes(
+          data: {
+            'name': _nameController.text.trim(),
+            'phone': _phoneController.text.trim(),
+            'cpf': _cpfController.text.trim(),
+          },
+        ),
+      );
+      _setMessage('Perfil atualizado com sucesso.');
+    } on AuthException catch (error) {
+      _setError(error.message);
+    } catch (_) {
+      _setError('Não foi possível atualizar o perfil.');
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingProfile = false);
+      }
+    }
+  }
+
+  Future<void> _sendPasswordReset() async {
+    final email = _user?.email;
+    if (email == null || email.isEmpty) {
+      _setError('Não há e-mail vinculado a esta conta.');
+      return;
+    }
+
+    setState(() {
+      _isSendingReset = true;
+      _message = null;
+      _error = null;
+    });
+
+    try {
+      await Supabase.instance.client.auth.resetPasswordForEmail(email);
+      _setMessage('Enviamos um e-mail com instruções para redefinir a senha.');
+    } on AuthException catch (error) {
+      _setError(error.message);
+    } catch (_) {
+      _setError('Não foi possível enviar o e-mail de redefinição.');
+    } finally {
+      if (mounted) {
+        setState(() => _isSendingReset = false);
+      }
+    }
+  }
+
+  Future<void> _changeEmail() async {
+    final newEmail = _emailController.text.trim();
+    if (newEmail.isEmpty) {
+      _setError('Informe o novo e-mail.');
+      return;
+    }
+    if (newEmail == _user?.email) {
+      _setError('Informe um e-mail diferente do atual.');
+      return;
+    }
+
+    final nonce = await _requestReauthentication(
+      'Confirmar troca de e-mail',
+      'Enviaremos um código para o e-mail atual antes de solicitar a confirmação do novo e-mail.',
+    );
+    if (nonce == null) {
+      return;
+    }
+
+    setState(() {
+      _isChangingEmail = true;
+      _message = null;
+      _error = null;
+    });
+
+    try {
+      await Supabase.instance.client.auth.updateUser(
+        UserAttributes(email: newEmail, nonce: nonce),
+      );
+      _setMessage('Enviamos a confirmação para o novo e-mail informado.');
+    } on AuthException catch (error) {
+      _setError(error.message);
+    } catch (_) {
+      _setError('Não foi possível solicitar a troca de e-mail.');
+    } finally {
+      if (mounted) {
+        setState(() => _isChangingEmail = false);
+      }
+    }
+  }
+
+  Future<void> _changePassword() async {
+    final password = _passwordController.text;
+    final confirmation = _confirmPasswordController.text;
+
+    if (password.length < 6) {
+      _setError('A nova senha deve ter pelo menos 6 caracteres.');
+      return;
+    }
+    if (password != confirmation) {
+      _setError('A nova senha e a confirmação não conferem.');
+      return;
+    }
+
+    final nonce = await _requestReauthentication(
+      'Confirmar alteração de senha',
+      'Enviaremos um código para confirmar sua identidade antes de alterar a senha.',
+    );
+    if (nonce == null) {
+      return;
+    }
+
+    setState(() {
+      _isChangingPassword = true;
+      _message = null;
+      _error = null;
+    });
+
+    try {
+      await Supabase.instance.client.auth.updateUser(
+        UserAttributes(password: password, nonce: nonce),
+      );
+      _passwordController.clear();
+      _confirmPasswordController.clear();
+      _setMessage('Senha alterada com sucesso.');
+    } on AuthException catch (error) {
+      _setError(error.message);
+    } catch (_) {
+      _setError('Não foi possível alterar a senha.');
+    } finally {
+      if (mounted) {
+        setState(() => _isChangingPassword = false);
+      }
+    }
+  }
+
+  Future<String?> _requestReauthentication(String title, String subtitle) {
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return ReauthenticationDialog(title: title, subtitle: subtitle);
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = _user;
+    if (user == null) {
+      return ListView(
+        padding: const EdgeInsets.all(24),
+        children: const [
+          PageTitle(
+            title: 'Perfil',
+            subtitle: 'Entre no Supabase para gerenciar sua conta.',
+          ),
+        ],
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        PageTitle(
+          title: 'Perfil',
+          subtitle: user.email ?? 'Conta autenticada',
+        ),
+        const SizedBox(height: 16),
+        ResponsiveGrid(
+          children: [
+            SectionPanel(
+              title: 'Dados da conta',
+              child: Column(
+                children: [
+                  ProfileTextField(
+                    controller: _nameController,
+                    label: 'Nome',
+                    icon: Icons.edit_outlined,
+                  ),
+                  ProfileTextField(
+                    controller: _phoneController,
+                    label: 'Telefone',
+                    icon: Icons.edit_outlined,
+                    keyboardType: TextInputType.phone,
+                  ),
+                  ProfileTextField(
+                    controller: _cpfController,
+                    label: 'CPF',
+                    icon: Icons.edit_outlined,
+                    keyboardType: TextInputType.number,
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      onPressed: _isSavingProfile ? null : _saveProfile,
+                      icon: const Icon(Icons.save_outlined),
+                      label: const Text('Salvar perfil'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SectionPanel(
+              title: 'E-mail e confirmação',
+              child: Column(
+                children: [
+                  ProfileTextField(
+                    controller: _emailController,
+                    label: 'E-mail',
+                    icon: Icons.alternate_email_outlined,
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      onPressed: _isChangingEmail ? null : _changeEmail,
+                      icon: const Icon(Icons.mark_email_read_outlined),
+                      label: const Text('Alterar e-mail'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SectionPanel(
+              title: 'Senha',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _isSendingReset ? null : _sendPasswordReset,
+                    icon: const Icon(Icons.lock_reset_outlined),
+                    label: const Text('Enviar e-mail para redefinir senha'),
+                  ),
+                  const SizedBox(height: 12),
+                  ProfileTextField(
+                    controller: _passwordController,
+                    label: 'Nova senha',
+                    icon: Icons.edit_outlined,
+                    obscureText: true,
+                  ),
+                  ProfileTextField(
+                    controller: _confirmPasswordController,
+                    label: 'Confirmar nova senha',
+                    icon: Icons.edit_outlined,
+                    obscureText: true,
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      onPressed:
+                          _isChangingPassword ? null : _changePassword,
+                      icon: const Icon(Icons.verified_user_outlined),
+                      label: const Text('Alterar com reautenticação'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SectionPanel(
+              title: 'Segurança',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SecurityStatusRow(
+                    icon: Icons.mail_lock_outlined,
+                    title: 'Confirmação de e-mail',
+                    subtitle: user.emailConfirmedAt == null
+                        ? 'E-mail ainda não confirmado.'
+                        : 'E-mail confirmado.',
+                  ),
+                  const SizedBox(height: 12),
+                  SecurityStatusRow(
+                    icon: Icons.history_outlined,
+                    title: 'Último acesso',
+                    subtitle: user.lastSignInAt ?? 'Sem registro disponível.',
+                  ),
+                  if (_message != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      _message!,
+                      style: const TextStyle(color: Color(0xFF245B57)),
+                    ),
+                  ],
+                  if (_error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      _error!,
+                      style: const TextStyle(color: Color(0xFF9A1D24)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class ProfileTextField extends StatelessWidget {
+  const ProfileTextField({
+    required this.controller,
+    required this.label,
+    required this.icon,
+    this.keyboardType,
+    this.obscureText = false,
+    super.key,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final IconData icon;
+  final TextInputType? keyboardType;
+  final bool obscureText;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        obscureText: obscureText,
+        decoration: InputDecoration(
+          border: const OutlineInputBorder(),
+          labelText: label,
+          suffixIcon: Icon(icon),
+        ),
+      ),
+    );
+  }
+}
+
+class SecurityStatusRow extends StatelessWidget {
+  const SecurityStatusRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    super.key,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: const Color(0xFF245B57)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(subtitle, style: const TextStyle(color: Color(0xFF5E6762))),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class ReauthenticationDialog extends StatefulWidget {
+  const ReauthenticationDialog({
+    required this.title,
+    required this.subtitle,
+    super.key,
+  });
+
+  final String title;
+  final String subtitle;
+
+  @override
+  State<ReauthenticationDialog> createState() => _ReauthenticationDialogState();
+}
+
+class _ReauthenticationDialogState extends State<ReauthenticationDialog> {
+  final _codeController = TextEditingController();
+  var _isSending = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_sendCode());
+  }
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendCode() async {
+    setState(() {
+      _isSending = true;
+      _error = null;
+    });
+
+    try {
+      await Supabase.instance.client.auth.reauthenticate();
+    } on AuthException catch (error) {
+      setState(() => _error = error.message);
+    } catch (_) {
+      setState(() => _error = 'Não foi possível enviar o código.');
+    } finally {
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
+    }
+  }
+
+  void _confirm() {
+    final code = _codeController.text.trim();
+    if (code.isEmpty) {
+      setState(() => _error = 'Informe o código recebido.');
+      return;
+    }
+    Navigator.of(context).pop(code);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      icon: const Icon(Icons.verified_user_outlined),
+      title: Text(widget.title),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(widget.subtitle),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _codeController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Código de reautenticação',
+            ),
+            onSubmitted: (_) => _confirm(),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(_error!, style: const TextStyle(color: Color(0xFF9A1D24))),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        TextButton.icon(
+          onPressed: _isSending ? null : _sendCode,
+          icon: const Icon(Icons.refresh_outlined),
+          label: const Text('Reenviar código'),
+        ),
+        FilledButton.icon(
+          onPressed: _isSending ? null : _confirm,
+          icon: _isSending
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.check_outlined),
+          label: const Text('Confirmar'),
+        ),
+      ],
+    );
+  }
+}
+
 class RgtHomePage extends StatefulWidget {
   const RgtHomePage({super.key});
 
@@ -795,6 +1347,7 @@ class _RgtHomePageState extends State<RgtHomePage> {
         },
         onCashClosingAdded: _addCashClosing,
       ),
+      const ProfilePage(),
     ];
 
     return Scaffold(
@@ -845,6 +1398,11 @@ class _RgtHomePageState extends State<RgtHomePage> {
                   icon: Icon(Icons.receipt_long_outlined),
                   selectedIcon: Icon(Icons.receipt_long),
                   label: 'Mensal',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.person_outline),
+                  selectedIcon: Icon(Icons.person),
+                  label: 'Perfil',
                 ),
               ],
             ),
@@ -1210,6 +1768,12 @@ class RgtSideNav extends StatelessWidget {
             label: 'Demonstrativo mensal',
             selected: selectedIndex == 2,
             onTap: () => onChanged(2),
+          ),
+          NavButton(
+            icon: Icons.person_outline,
+            label: 'Perfil',
+            selected: selectedIndex == 3,
+            onTap: () => onChanged(3),
           ),
           const Spacer(),
           if (onSignOut != null) ...[

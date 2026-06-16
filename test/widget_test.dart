@@ -260,4 +260,17 @@ void main() {
     expect(find.text('Confirmar senha'), findsOneWidget);
     expect(find.text('Criar conta'), findsOneWidget);
   });
+
+  testWidgets('profile page is available from app shell', (tester) async {
+    await tester.pumpWidget(const SistemaRgtApp());
+
+    await tester.tap(find.text('Perfil'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Perfil'), findsWidgets);
+    expect(
+      find.text('Entre no Supabase para gerenciar sua conta.'),
+      findsOneWidget,
+    );
+  });
 }
