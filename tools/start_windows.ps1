@@ -15,7 +15,7 @@ if ([string]::IsNullOrWhiteSpace($env:SUPABASE_URL)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($env:UPDATE_MANIFEST_URL)) {
-  $env:UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/dahan1981/sistema-rgt/main/updates/latest.json"
+  $env:UPDATE_MANIFEST_URL = "https://libpncdxxgwshnlxicbt.supabase.co/storage/v1/object/public/app-updates/latest.json"
 }
 
 $dartDefines = @(
