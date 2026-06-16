@@ -30,4 +30,13 @@ windows/flutter/ephemeral/
 *.log
 *.tmp
 
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
 tools/start_windows.local.ps1
