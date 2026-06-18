@@ -950,6 +950,206 @@ class _ReauthenticationDialogState extends State<ReauthenticationDialog> {
   }
 }
 
+class AuditLogEntry {
+  const AuditLogEntry({
+    required this.tableName,
+    required this.recordId,
+    required this.action,
+    required this.actorEmail,
+    required this.occurredAt,
+  });
+
+  final String tableName;
+  final String recordId;
+  final String action;
+  final String actorEmail;
+  final DateTime occurredAt;
+
+  factory AuditLogEntry.fromJson(Map<String, dynamic> json) {
+    return AuditLogEntry(
+      tableName: json['table_name']?.toString() ?? '',
+      recordId: json['record_id']?.toString() ?? '',
+      action: json['action']?.toString() ?? '',
+      actorEmail: json['actor_email']?.toString() ?? 'Usuário não informado',
+      occurredAt: DateTime.parse(json['occurred_at'] as String).toLocal(),
+    );
+  }
+}
+
+class AuditPage extends StatefulWidget {
+  const AuditPage({super.key});
+
+  @override
+  State<AuditPage> createState() => _AuditPageState();
+}
+
+class _AuditPageState extends State<AuditPage> {
+  late Future<List<AuditLogEntry>> _entriesFuture = _fetchEntries();
+
+  Future<List<AuditLogEntry>> _fetchEntries() async {
+    if (!SupabaseConfig.isConfigured ||
+        Supabase.instance.client.auth.currentUser == null) {
+      return const [];
+    }
+
+    final rows = await Supabase.instance.client
+        .from('audit_log')
+        .select('table_name, record_id, action, actor_email, occurred_at')
+        .order('occurred_at', ascending: false)
+        .limit(100);
+
+    return rows.map<AuditLogEntry>((row) {
+      return AuditLogEntry.fromJson(row);
+    }).toList();
+  }
+
+  void _refresh() {
+    setState(() => _entriesFuture = _fetchEntries());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: PageTitle(
+                title: 'Auditoria',
+                subtitle: 'Histórico de lançamentos, alterações e responsáveis.',
+              ),
+            ),
+            IconButton(
+              tooltip: 'Atualizar auditoria',
+              onPressed: _refresh,
+              icon: const Icon(Icons.refresh_outlined),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        FutureBuilder<List<AuditLogEntry>>(
+          future: _entriesFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(),
+                ),
+              );
+            }
+
+            if (snapshot.hasError) {
+              return const SectionPanel(
+                title: 'Eventos recentes',
+                child: Text('Não foi possível carregar a auditoria.'),
+              );
+            }
+
+            final entries = snapshot.data ?? const [];
+            if (entries.isEmpty) {
+              return const SectionPanel(
+                title: 'Eventos recentes',
+                child: Text(
+                  'Nenhum evento de auditoria encontrado para esta sessão.',
+                ),
+              );
+            }
+
+            return SectionPanel(
+              title: 'Eventos recentes',
+              child: Column(
+                children: [
+                  for (final entry in entries) AuditLogTile(entry: entry),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class AuditLogTile extends StatelessWidget {
+  const AuditLogTile({required this.entry, super.key});
+
+  final AuditLogEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final actionColor = switch (entry.action) {
+      'INSERT' => const Color(0xFF245B57),
+      'UPDATE' => const Color(0xFF856404),
+      'DELETE' => const Color(0xFF9A1D24),
+      _ => const Color(0xFF5E6762),
+    };
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F7F4),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE1E5DF)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.manage_history_outlined, color: actionColor),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${_actionLabel(entry.action)} em ${_tableLabel(entry.tableName)}',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text('Responsável: ${entry.actorEmail}'),
+                Text('Registro: ${entry.recordId}'),
+                Text('Data e hora: ${_formatDateTime(entry.occurredAt)}'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _actionLabel(String action) {
+    return switch (action) {
+      'INSERT' => 'Lançamento',
+      'UPDATE' => 'Alteração',
+      'DELETE' => 'Exclusão',
+      _ => action,
+    };
+  }
+
+  String _tableLabel(String tableName) {
+    return switch (tableName) {
+      'collaborators' => 'colaboradores',
+      'unit_assignments' => 'histórico de banca',
+      'monthly_statements' => 'demonstrativo mensal',
+      'absence_entries' => 'faltas',
+      'negative_cash_entries' => 'caixa negativo',
+      'cash_closings' => 'fechamento de caixa',
+      'units' => 'bancas',
+      _ => tableName,
+    };
+  }
+
+  String _formatDateTime(DateTime date) {
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return '$day/$month/${date.year} $hour:$minute';
+  }
+}
+
 class RgtHomePage extends StatefulWidget {
   const RgtHomePage({super.key});
 
@@ -1348,6 +1548,7 @@ class _RgtHomePageState extends State<RgtHomePage> {
         onCashClosingAdded: _addCashClosing,
       ),
       const ProfilePage(),
+      const AuditPage(),
     ];
 
     return Scaffold(
@@ -1403,6 +1604,11 @@ class _RgtHomePageState extends State<RgtHomePage> {
                   icon: Icon(Icons.person_outline),
                   selectedIcon: Icon(Icons.person),
                   label: 'Perfil',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.manage_history_outlined),
+                  selectedIcon: Icon(Icons.manage_history),
+                  label: 'Auditoria',
                 ),
               ],
             ),
@@ -1774,6 +1980,12 @@ class RgtSideNav extends StatelessWidget {
             label: 'Perfil',
             selected: selectedIndex == 3,
             onTap: () => onChanged(3),
+          ),
+          NavButton(
+            icon: Icons.manage_history_outlined,
+            label: 'Auditoria',
+            selected: selectedIndex == 4,
+            onTap: () => onChanged(4),
           ),
           const Spacer(),
           if (onSignOut != null) ...[

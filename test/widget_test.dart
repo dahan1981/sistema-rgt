@@ -273,4 +273,18 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('audit page is available from app shell', (tester) async {
+    await tester.pumpWidget(const SistemaRgtApp());
+
+    await tester.tap(find.text('Auditoria'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Auditoria'), findsWidgets);
+    expect(find.text('Eventos recentes'), findsOneWidget);
+    expect(
+      find.text('Nenhum evento de auditoria encontrado para esta sessão.'),
+      findsOneWidget,
+    );
+  });
 }
