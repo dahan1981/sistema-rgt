@@ -212,130 +212,132 @@ class _LoginPageState extends State<LoginPage> {
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'Acesso RGT RH',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Entre com o usuário autorizado para registrar lançamentos com auditoria.',
-                    style: TextStyle(color: Color(0xFF5E6762)),
-                  ),
-                  const SizedBox(height: 20),
-                  if (_isCreatingAccount) ...[
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Acesso RGT RH',
+                      style:
+                          TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Entre com o usuário autorizado para registrar lançamentos com auditoria.',
+                      style: TextStyle(color: Color(0xFF5E6762)),
+                    ),
+                    const SizedBox(height: 20),
+                    if (_isCreatingAccount) ...[
+                      TextField(
+                        controller: _nameController,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: 'Nome',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     TextField(
-                      controller: _nameController,
-                      textCapitalization: TextCapitalization.words,
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
-                        labelText: 'Nome',
+                        labelText: 'E-mail',
                       ),
                     ),
-                    const SizedBox(height: 12),
-                  ],
-                  TextField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'E-mail',
-                    ),
-                  ),
-                  if (_isCreatingAccount) ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        labelText: 'Telefone',
+                    if (_isCreatingAccount) ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: 'Telefone',
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _cpfController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        labelText: 'CPF',
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _cpfController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: 'CPF',
+                        ),
                       ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Senha',
-                    ),
-                    onSubmitted: (_) {
-                      if (!_isSubmitting && !_isCreatingAccount) {
-                        unawaited(_signIn());
-                      }
-                    },
-                  ),
-                  if (_isCreatingAccount) ...[
+                    ],
                     const SizedBox(height: 12),
                     TextField(
-                      controller: _confirmPasswordController,
+                      controller: _passwordController,
                       obscureText: true,
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
-                        labelText: 'Confirmar senha',
+                        labelText: 'Senha',
                       ),
                       onSubmitted: (_) {
-                        if (!_isSubmitting) {
-                          unawaited(_signUp());
+                        if (!_isSubmitting && !_isCreatingAccount) {
+                          unawaited(_signIn());
                         }
                       },
                     ),
-                  ],
-                  if (_error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      _error!,
-                      style: const TextStyle(color: Color(0xFF9A1D24)),
+                    if (_isCreatingAccount) ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _confirmPasswordController,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: 'Confirmar senha',
+                        ),
+                        onSubmitted: (_) {
+                          if (!_isSubmitting) {
+                            unawaited(_signUp());
+                          }
+                        },
+                      ),
+                    ],
+                    if (_error != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        _error!,
+                        style: const TextStyle(color: Color(0xFF9A1D24)),
+                      ),
+                    ],
+                    if (_successMessage != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        _successMessage!,
+                        style: const TextStyle(color: Color(0xFF245B57)),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: _isSubmitting
+                          ? null
+                          : (_isCreatingAccount ? _signUp : _signIn),
+                      icon: _isSubmitting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(
+                              _isCreatingAccount
+                                  ? Icons.person_add_alt_1_outlined
+                                  : Icons.login_outlined,
+                            ),
+                      label:
+                          Text(_isCreatingAccount ? 'Criar conta' : 'Entrar'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: _isSubmitting ? null : _toggleMode,
+                      child: Text(
+                        _isCreatingAccount
+                            ? 'Já tenho conta'
+                            : 'Não tenho conta de login',
+                      ),
                     ),
                   ],
-                  if (_successMessage != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      _successMessage!,
-                      style: const TextStyle(color: Color(0xFF245B57)),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: _isSubmitting
-                        ? null
-                        : (_isCreatingAccount ? _signUp : _signIn),
-                    icon: _isSubmitting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Icon(
-                            _isCreatingAccount
-                                ? Icons.person_add_alt_1_outlined
-                                : Icons.login_outlined,
-                          ),
-                    label: Text(_isCreatingAccount ? 'Criar conta' : 'Entrar'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: _isSubmitting ? null : _toggleMode,
-                    child: Text(
-                      _isCreatingAccount
-                          ? 'Já tenho conta'
-                          : 'Não tenho conta de login',
-                    ),
-                  ),
-                ],
                 ),
               ),
             ),
@@ -722,8 +724,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   Align(
                     alignment: Alignment.centerRight,
                     child: FilledButton.icon(
-                      onPressed:
-                          _isChangingPassword ? null : _changePassword,
+                      onPressed: _isChangingPassword ? null : _changePassword,
                       icon: const Icon(Icons.verified_user_outlined),
                       label: const Text('Alterar com reautenticação'),
                     ),
@@ -1017,7 +1018,8 @@ class _AuditPageState extends State<AuditPage> {
             const Expanded(
               child: PageTitle(
                 title: 'Auditoria',
-                subtitle: 'Histórico de lançamentos, alterações e responsáveis.',
+                subtitle:
+                    'Histórico de lançamentos, alterações e responsáveis.',
               ),
             ),
             IconButton(
@@ -1219,8 +1221,9 @@ class _RgtHomePageState extends State<RgtHomePage> {
 
     try {
       final snapshot = await repository.fetchSnapshot();
-      final selectedEmployee =
-          snapshot.employees.isEmpty ? _selectedEmployee : snapshot.employees.first;
+      final selectedEmployee = snapshot.employees.isEmpty
+          ? _selectedEmployee
+          : snapshot.employees.first;
       final statement = await repository.fetchStatement(
         _employeeWithEffectiveUnitFrom(
           selectedEmployee,
@@ -1237,8 +1240,8 @@ class _RgtHomePageState extends State<RgtHomePage> {
         if (snapshot.employees.isNotEmpty) {
           _employees = snapshot.employees;
           _selectedEmployee = selectedEmployee;
-          _selectedUnit =
-              _effectiveUnitForFrom(selectedEmployee, DateTime.now(), snapshot.unitAssignments);
+          _selectedUnit = _effectiveUnitForFrom(
+              selectedEmployee, DateTime.now(), snapshot.unitAssignments);
         }
         _unitAssignments
           ..clear()
@@ -1331,7 +1334,8 @@ class _RgtHomePageState extends State<RgtHomePage> {
     }
 
     try {
-      final effectiveEmployee = _employeeWithEffectiveUnit(employee, DateTime.now());
+      final effectiveEmployee =
+          _employeeWithEffectiveUnit(employee, DateTime.now());
       final statement = await repository.fetchStatement(effectiveEmployee);
       if (mounted && _selectedEmployee.id == employee.id) {
         setState(() => _statement = statement);
@@ -1384,7 +1388,8 @@ class _RgtHomePageState extends State<RgtHomePage> {
         );
       }
     });
-    unawaited(_persist((repository) => repository.saveEmployee(updatedEmployee)));
+    unawaited(
+        _persist((repository) => repository.saveEmployee(updatedEmployee)));
   }
 
   void _addUnitAssignment(UnitAssignment assignment) {
@@ -1461,15 +1466,24 @@ class _RgtHomePageState extends State<RgtHomePage> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_reportMessage(options)),
-        behavior: SnackBarBehavior.floating,
-      ),
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return ReportPreviewDialog(
+          options: options,
+          selectedEmployee: _employeeWithEffectiveUnit(
+            _selectedEmployee,
+            DateTime.now(),
+          ),
+          selectedStatement: _statement,
+          cashClosings: _cashClosings,
+          statementForEmployee: _statementForReport,
+        );
+      },
     );
   }
 
-  String _reportMessage(ReportOptions options) {
+  String reportMessage(ReportOptions options) {
     final parts = <String>[];
 
     if (options.includeFinancialStatement) {
@@ -1489,6 +1503,14 @@ class _RgtHomePageState extends State<RgtHomePage> {
 
   String _collaboratorCountLabel(int count) {
     return count == 1 ? '1 colaborador' : '$count colaboradores';
+  }
+
+  MonthlyStatement _statementForReport(Employee employee) {
+    if (employee.id == _selectedEmployee.id) {
+      return _statement.copyWith(employee: employee);
+    }
+
+    return sampleStatement(employee);
   }
 
   @override
@@ -1919,6 +1941,344 @@ class ReportEmployeeSelection extends StatelessWidget {
       ),
     );
   }
+}
+
+class ReportPreviewDialog extends StatelessWidget {
+  const ReportPreviewDialog({
+    required this.options,
+    required this.selectedEmployee,
+    required this.selectedStatement,
+    required this.cashClosings,
+    required this.statementForEmployee,
+    super.key,
+  });
+
+  final ReportOptions options;
+  final Employee selectedEmployee;
+  final MonthlyStatement selectedStatement;
+  final List<CashClosingEntry> cashClosings;
+  final MonthlyStatement Function(Employee employee) statementForEmployee;
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final monthClosings = _entriesUntil(today);
+    final generalClosing = CashClosingReportSummary.fromEntries(monthClosings);
+    final statement = selectedStatement.copyWith(employee: selectedEmployee);
+    final statementSummary = const RgtCalculator().calculate(
+      statement,
+      cashClosings: cashClosings,
+      today: today,
+      restrictCashClosingsToStatementUnit: false,
+    );
+
+    return AlertDialog(
+      title: const Text('Relatório gerado'),
+      content: SizedBox(
+        width: 760,
+        height: 620,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Gerado em ${_formatDateTime(today)}',
+                style: const TextStyle(color: Color(0xFF5E6762)),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Fonte: dados carregados e calculados no sistema.',
+                style: TextStyle(color: Color(0xFF5E6762)),
+              ),
+              const SizedBox(height: 16),
+              if (options.includeFinancialStatement) ...[
+                SectionPanel(
+                  title: 'Demonstrativo mensal',
+                  child: Column(
+                    children: [
+                      ReportInfoRow(
+                        label: 'Colaborador',
+                        value: selectedEmployee.name,
+                      ),
+                      ReportInfoRow(
+                        label: 'Banca',
+                        value: selectedEmployee.unit.label,
+                      ),
+                      ReportInfoRow(
+                        label: 'Mês de referência',
+                        value:
+                            '${statement.referenceMonth.month.toString().padLeft(2, '0')}/${statement.referenceMonth.year}',
+                      ),
+                      const Divider(height: 24),
+                      SummaryTable(summary: statementSummary),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (options.includeGeneralCashClosing) ...[
+                SectionPanel(
+                  title: 'Fechamento de caixa geral',
+                  child: Column(
+                    children: [
+                      SummaryRow(
+                        label: 'Caixa positivo no mês',
+                        value: generalClosing.positive,
+                      ),
+                      SummaryRow(
+                        label: 'Caixa negativo no mês',
+                        value: generalClosing.negative,
+                      ),
+                      SummaryRow(
+                        label: 'Fechamento de caixa parcial',
+                        value: generalClosing.balance,
+                      ),
+                      SummaryRow(
+                        label: 'Descontar em folha',
+                        value: generalClosing.payrollDeductions,
+                      ),
+                      const Divider(height: 24),
+                      for (final unit in Unit.values.where((unit) {
+                        return unit != Unit.geral &&
+                            monthClosings.any((entry) => entry.unit == unit);
+                      }))
+                        ReportCashClosingBreakdownRow(
+                          label: unit.label,
+                          summary: CashClosingReportSummary.fromEntries(
+                            monthClosings.where((entry) => entry.unit == unit),
+                          ),
+                        ),
+                      if (monthClosings.isEmpty)
+                        const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text('Nenhum fechamento lançado no mês.'),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (options.includeEmployeeCashClosing)
+                SectionPanel(
+                  title: 'Fechamento de caixa por colaborador',
+                  child: options.selectedEmployees.isEmpty
+                      ? const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text('Nenhum colaborador selecionado.'),
+                        )
+                      : Column(
+                          children: [
+                            for (final employee in options.selectedEmployees)
+                              ReportEmployeeClosingBlock(
+                                employee: employee,
+                                statement: statementForEmployee(employee),
+                                entries: monthClosings.where((entry) {
+                                  return entry.employee.id == employee.id;
+                                }).toList(),
+                              ),
+                          ],
+                        ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        FilledButton.icon(
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(Icons.check_outlined),
+          label: const Text('Concluir'),
+        ),
+      ],
+    );
+  }
+
+  List<CashClosingEntry> _entriesUntil(DateTime today) {
+    return cashClosings.where((entry) {
+      return entry.date.year == today.year &&
+          entry.date.month == today.month &&
+          !entry.date.isAfter(today);
+    }).toList();
+  }
+
+  String _formatDateTime(DateTime date) {
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return '$day/$month/${date.year} às $hour:$minute';
+  }
+}
+
+class ReportEmployeeClosingBlock extends StatelessWidget {
+  const ReportEmployeeClosingBlock({
+    required this.employee,
+    required this.statement,
+    required this.entries,
+    super.key,
+  });
+
+  final Employee employee;
+  final MonthlyStatement statement;
+  final List<CashClosingEntry> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    final closing = CashClosingReportSummary.fromEntries(entries);
+    final summary = const RgtCalculator().calculate(
+      statement.copyWith(employee: employee),
+      cashClosings: entries,
+      today: DateTime.now(),
+      restrictCashClosingsToStatementUnit: false,
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F7F4),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE1E5DF)),
+      ),
+      child: Column(
+        children: [
+          ReportInfoRow(label: 'Colaborador', value: employee.name),
+          ReportInfoRow(label: 'Banca', value: employee.unit.label),
+          SummaryRow(label: 'Caixa positivo', value: closing.positive),
+          SummaryRow(label: 'Caixa negativo', value: closing.negative),
+          SummaryRow(label: 'Fechamento parcial', value: closing.balance),
+          SummaryRow(
+            label: 'Desconto em folha',
+            value: closing.payrollDeductions,
+          ),
+          SummaryRow(
+            label: 'Passivo calculado',
+            value: summary.finalLiability,
+            emphasized: true,
+          ),
+          if (entries.isNotEmpty) ...[
+            const Divider(height: 20),
+            for (final entry in entries)
+              ReportInfoRow(
+                label: formatDate(entry.date),
+                value:
+                    '${entry.type.label} - ${formatCurrency(entry.amount)} - ${entry.description}',
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class ReportCashClosingBreakdownRow extends StatelessWidget {
+  const ReportCashClosingBreakdownRow({
+    required this.label,
+    required this.summary,
+    super.key,
+  });
+
+  final String label;
+  final CashClosingReportSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Positivo ${formatCurrency(summary.positive)} · '
+            'Negativo ${formatCurrency(summary.negative)} · '
+            'Parcial ${formatCurrency(summary.balance)}',
+            textAlign: TextAlign.end,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ReportInfoRow extends StatelessWidget {
+  const ReportInfoRow({
+    required this.label,
+    required this.value,
+    super.key,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class CashClosingReportSummary {
+  const CashClosingReportSummary({
+    required this.positive,
+    required this.negative,
+    required this.payrollDeductions,
+  });
+
+  factory CashClosingReportSummary.fromEntries(
+    Iterable<CashClosingEntry> entries,
+  ) {
+    var positive = 0.0;
+    var negative = 0.0;
+    var payrollDeductions = 0.0;
+
+    for (final entry in entries) {
+      if (entry.type == CashClosingType.positive) {
+        positive += entry.amount;
+      } else {
+        negative += entry.amount;
+        if (entry.deductFromPayroll) {
+          payrollDeductions += entry.amount;
+        }
+      }
+    }
+
+    return CashClosingReportSummary(
+      positive: positive,
+      negative: negative,
+      payrollDeductions: payrollDeductions,
+    );
+  }
+
+  final double positive;
+  final double negative;
+  final double payrollDeductions;
+
+  double get balance => positive - negative;
 }
 
 class RgtSideNav extends StatelessWidget {

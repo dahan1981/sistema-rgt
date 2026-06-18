@@ -244,6 +244,22 @@ void main() {
     expect(find.text('Fechamento de caixa por colaborador'), findsOneWidget);
     expect(find.text('Preparar relatório'), findsOneWidget);
   });
+  testWidgets('report preview shows calculated totals', (tester) async {
+    await tester.pumpWidget(const SistemaRgtApp());
+
+    await tester.tap(find.byTooltip('Gerar relatório'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Preparar relatório'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Relatório gerado'), findsOneWidget);
+    expect(find.text('Demonstrativo mensal'), findsOneWidget);
+    expect(find.text('Caixa positivo no mês'), findsOneWidget);
+    expect(find.text('Fechamento de caixa parcial'), findsWidgets);
+    expect(find.text('R\$ 116,25'), findsOneWidget);
+    expect(find.text('R\$ 42,00'), findsWidgets);
+  });
+
   testWidgets('login page exposes account creation fields', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
