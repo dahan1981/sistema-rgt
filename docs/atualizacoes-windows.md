@@ -39,13 +39,18 @@ Exemplo:
 {
   "version": "0.1.1",
   "windows_url": "https://libpncdxxgwshnlxicbt.supabase.co/storage/v1/object/public/app-updates/windows/SistemaRGT-Setup-0.1.1.exe",
+  "sha256": "hash_sha256_de_64_caracteres_do_instalador",
   "notes": "Correções no fechamento de caixa e melhorias de auditoria.",
   "mandatory": false
 }
 ```
 
 Quando a versão remota for maior que a versão instalada, o app mostra a tela
-`Atualização disponível` e abre o link de download após confirmação do usuário.
+`Atualização disponível`. No Windows, o aplicativo baixa o instalador, confere
+o campo obrigatório `sha256` e só executa o arquivo quando o hash coincide.
+
+O comando `tools/release_windows.ps1` automatiza build, instalador, hash,
+manifesto e publicação opcional no Supabase Storage.
 
 ## Configuração do bucket
 

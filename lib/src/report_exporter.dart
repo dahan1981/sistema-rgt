@@ -247,6 +247,9 @@ class ReportExporter {
     var negative = 0.0;
     var deductions = 0.0;
     for (final entry in entries) {
+      if (entry.isCanceled) {
+        continue;
+      }
       if (entry.type == CashClosingType.positive) {
         positive += entry.amount;
       } else {

@@ -61,6 +61,9 @@ class RgtCalculator {
     var payrollDeductions = 0.0;
 
     for (final entry in entries) {
+      if (entry.isCanceled) {
+        continue;
+      }
       final inPeriod = !entry.date.isBefore(periodStart);
       final untilToday = !entry.date.isAfter(currentDate);
       final sameContext = entry.employee.id == employee.id &&

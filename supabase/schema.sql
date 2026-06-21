@@ -114,6 +114,33 @@ create table if not exists public.audit_log (
   occurred_at timestamptz not null default now()
 );
 
+create table if not exists public.authorized_users (
+  email text primary key check (email = lower(trim(email))),
+  display_name text not null,
+  role text not null default 'rh' check (role in ('admin', 'rh')),
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create or replace function public.is_authorized_rgt_user()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.authorized_users au
+    where au.email = lower(coalesce(auth.jwt() ->> 'email', ''))
+      and au.active
+  );
+$$;
+
+revoke all on function public.is_authorized_rgt_user() from public;
+grant execute on function public.is_authorized_rgt_user() to authenticated;
+
 alter table public.units
   add column if not exists updated_at timestamptz not null default now(),
   add column if not exists created_by uuid references auth.users(id),
@@ -145,7 +172,15 @@ alter table public.negative_cash_entries
 alter table public.cash_closings
   add column if not exists updated_at timestamptz not null default now(),
   add column if not exists created_by uuid references auth.users(id),
-  add column if not exists updated_by uuid references auth.users(id);
+  add column if not exists updated_by uuid references auth.users(id),
+  add column if not exists canceled_at timestamptz,
+  add column if not exists canceled_by uuid references auth.users(id),
+  add column if not exists cancellation_reason text,
+  add column if not exists last_correction_reason text;
+
+create index if not exists cash_closings_active_period_idx
+on public.cash_closings (entry_date, unit_id, collaborator_id)
+where canceled_at is null;
 
 alter table public.monthly_statements
   alter column incentive_score drop not null,
@@ -404,6 +439,85 @@ grant execute on function public.save_monthly_statement(
   boolean, boolean, jsonb, jsonb
 ) to authenticated;
 
+create or replace function public.correct_cash_closing(
+  p_cash_closing_id uuid,
+  p_amount numeric,
+  p_description text,
+  p_deduct_from_payroll boolean,
+  p_reason text
+)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  if p_amount <= 0 then
+    raise exception 'O valor deve ser maior que zero.';
+  end if;
+  if length(trim(coalesce(p_description, ''))) < 3 then
+    raise exception 'Informe uma descrição válida.';
+  end if;
+  if length(trim(coalesce(p_reason, ''))) < 5 then
+    raise exception 'A justificativa deve ter pelo menos 5 caracteres.';
+  end if;
+
+  update public.cash_closings
+  set
+    amount = p_amount,
+    description = trim(p_description),
+    deduct_from_payroll = case
+      when kind = 'negative' then p_deduct_from_payroll
+      else false
+    end,
+    last_correction_reason = trim(p_reason)
+  where id = p_cash_closing_id
+    and canceled_at is null;
+
+  if not found then
+    raise exception 'Fechamento não encontrado ou já cancelado.';
+  end if;
+end;
+$$;
+
+create or replace function public.cancel_cash_closing(
+  p_cash_closing_id uuid,
+  p_reason text
+)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  if length(trim(coalesce(p_reason, ''))) < 5 then
+    raise exception 'A justificativa deve ter pelo menos 5 caracteres.';
+  end if;
+
+  update public.cash_closings
+  set
+    canceled_at = now(),
+    canceled_by = auth.uid(),
+    cancellation_reason = trim(p_reason)
+  where id = p_cash_closing_id
+    and canceled_at is null;
+
+  if not found then
+    raise exception 'Fechamento não encontrado ou já cancelado.';
+  end if;
+end;
+$$;
+
+revoke all on function public.correct_cash_closing(
+  uuid, numeric, text, boolean, text
+) from public;
+grant execute on function public.correct_cash_closing(
+  uuid, numeric, text, boolean, text
+) to authenticated;
+revoke all on function public.cancel_cash_closing(uuid, text) from public;
+grant execute on function public.cancel_cash_closing(uuid, text)
+to authenticated;
+
 create or replace function public.effective_unit_for_collaborator(
   target_collaborator_id text,
   target_date date
@@ -453,7 +567,8 @@ as $$
   where unit_id = target_unit_id
     and collaborator_id = target_collaborator_id
     and entry_date >= date_trunc('month', target_date)::date
-    and entry_date <= target_date;
+    and entry_date <= target_date
+    and canceled_at is null;
 $$;
 
 create or replace function public.calculate_statement_total(statement_id uuid)
@@ -495,6 +610,7 @@ as $$
     from public.cash_closings cc
     cross join base b
     where cc.collaborator_id = b.collaborator_id
+      and cc.canceled_at is null
       and cc.unit_id = public.effective_unit_for_collaborator(
         b.collaborator_id,
         cc.entry_date
@@ -542,6 +658,7 @@ alter table public.absence_entries enable row level security;
 alter table public.negative_cash_entries enable row level security;
 alter table public.cash_closings enable row level security;
 alter table public.audit_log enable row level security;
+alter table public.authorized_users enable row level security;
 
 drop policy if exists "Authenticated users can manage units"
 on public.units;
@@ -563,49 +680,49 @@ on public.audit_log;
 create policy "Authenticated users can manage units"
 on public.units for all
 to authenticated
-using (true)
-with check (true);
+using (public.is_authorized_rgt_user())
+with check (public.is_authorized_rgt_user());
 
 create policy "Authenticated users can manage collaborators"
 on public.collaborators for all
 to authenticated
-using (true)
-with check (true);
+using (public.is_authorized_rgt_user())
+with check (public.is_authorized_rgt_user());
 
 create policy "Authenticated users can manage unit assignments"
 on public.unit_assignments for all
 to authenticated
-using (true)
-with check (true);
+using (public.is_authorized_rgt_user())
+with check (public.is_authorized_rgt_user());
 
 create policy "Authenticated users can manage monthly statements"
 on public.monthly_statements for all
 to authenticated
-using (true)
-with check (true);
+using (public.is_authorized_rgt_user())
+with check (public.is_authorized_rgt_user());
 
 create policy "Authenticated users can manage absence entries"
 on public.absence_entries for all
 to authenticated
-using (true)
-with check (true);
+using (public.is_authorized_rgt_user())
+with check (public.is_authorized_rgt_user());
 
 create policy "Authenticated users can manage negative cash entries"
 on public.negative_cash_entries for all
 to authenticated
-using (true)
-with check (true);
+using (public.is_authorized_rgt_user())
+with check (public.is_authorized_rgt_user());
 
 create policy "Authenticated users can manage cash closings"
 on public.cash_closings for all
 to authenticated
-using (true)
-with check (true);
+using (public.is_authorized_rgt_user())
+with check (public.is_authorized_rgt_user());
 
 create policy "Authenticated users can read audit log"
 on public.audit_log for select
 to authenticated
-using (true);
+using (public.is_authorized_rgt_user());
 
 insert into public.units (id, label, display_order)
 values

@@ -2,12 +2,16 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:sistema_rgt/src/calculator.dart';
 import 'package:sistema_rgt/src/app.dart';
 import 'package:sistema_rgt/src/models.dart';
 import 'package:sistema_rgt/src/initial_data.dart';
 import 'package:sistema_rgt/src/report_exporter.dart';
+import 'package:sistema_rgt/src/update_checker.dart';
 
 MonthlyStatement _filledStatement(Employee employee) {
   return MonthlyStatement(
@@ -61,6 +65,48 @@ final _testCashClosings = [
 ];
 
 void main() {
+  test('update manifest requires a valid SHA-256 hash', () async {
+    final validHash = List.filled(64, 'a').join();
+    PackageInfo.setMockInitialValues(
+      appName: 'Sistema RGT',
+      packageName: 'sistema_rgt',
+      version: '0.2.0',
+      buildNumber: '2',
+      buildSignature: '',
+    );
+    final validChecker = UpdateChecker(
+      manifestUrl: 'https://example.com/latest.json',
+      client: MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            'version': '1.0.0',
+            'windows_url': 'https://example.com/SistemaRGT.exe',
+            'sha256': validHash,
+            'notes': 'Versão estável',
+            'mandatory': false,
+          }),
+          200,
+        ),
+      ),
+    );
+    final invalidChecker = UpdateChecker(
+      manifestUrl: 'https://example.com/latest.json',
+      client: MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            'version': '1.0.0',
+            'windows_url': 'https://example.com/SistemaRGT.exe',
+            'sha256': 'inválido',
+          }),
+          200,
+        ),
+      ),
+    );
+
+    expect((await validChecker.check())?.sha256Hash, validHash);
+    expect(await invalidChecker.check(), isNull);
+  });
+
   test('new monthly statements start without financial data', () {
     final statement = emptyStatement(
       initialEmployees.first,
@@ -175,6 +221,32 @@ void main() {
     expect(summary.positive, 90);
   });
 
+  test('canceled cash closings do not affect totals', () {
+    final employee = initialEmployees.first;
+    final summary = const RgtCalculator().calculateCashClosingSummary(
+      [
+        CashClosingEntry(
+          id: 'canceled',
+          date: DateTime(2026, 6, 10),
+          unit: employee.unit,
+          employee: employee,
+          type: CashClosingType.negative,
+          amount: 500,
+          description: 'Lançamento cancelado',
+          deductFromPayroll: true,
+          canceledAt: DateTime(2026, 6, 11),
+          cancellationReason: 'Lançamento duplicado',
+        ),
+      ],
+      employee: employee,
+      startDate: DateTime(2026, 6),
+      today: DateTime(2026, 6, 30),
+    );
+
+    expect(summary.negative, 0);
+    expect(summary.payrollDeductions, 0);
+  });
+
   testWidgets('renders RGT dashboard shell', (tester) async {
     await tester.pumpWidget(const SistemaRgtApp());
 
@@ -218,6 +290,8 @@ void main() {
             onEmployeeSelected: (_) {},
             effectiveUnitForDate: (employee, _) => employee.unit,
             onEntryAdded: (_) async {},
+            onEntryCorrected: (_, __) async {},
+            onEntryCanceled: (_, __) async {},
           ),
         ),
       ),
@@ -228,6 +302,64 @@ void main() {
     expect(find.text('Todos'), findsOneWidget);
     expect(find.text('R\$ 116,25'), findsOneWidget);
     expect(find.text('R\$ 42,00'), findsWidgets);
+  });
+
+  testWidgets('cash closing cancellation requires a reason', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final employee = initialEmployees.first;
+    final entry = CashClosingEntry(
+      id: 'cancel-test',
+      date: DateTime.now(),
+      unit: employee.unit,
+      employee: employee,
+      type: CashClosingType.negative,
+      amount: 75,
+      description: 'Diferença para conferência',
+      deductFromPayroll: true,
+    );
+    String? cancellationReason;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CashClosingPage(
+            employees: [employee],
+            entries: [entry],
+            selectedUnit: employee.unit,
+            selectedEmployee: employee,
+            onUnitSelected: (_) {},
+            onEmployeeSelected: (_) {},
+            effectiveUnitForDate: (employee, _) => employee.unit,
+            onEntryAdded: (_) async {},
+            onEntryCorrected: (_, __) async {},
+            onEntryCanceled: (_, reason) async {
+              cancellationReason = reason;
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.scrollUntilVisible(
+      find.byTooltip('Ações do lançamento'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byTooltip('Ações do lançamento'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancelar lançamento'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirmar cancelamento'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, 'Lançamento duplicado');
+    await tester.pump();
+    await tester.tap(find.text('Confirmar cancelamento'));
+    await tester.pumpAndSettle();
+
+    expect(cancellationReason, 'Lançamento duplicado');
   });
 
   testWidgets('general collaborator filter shows all employees',
@@ -399,7 +531,7 @@ void main() {
   testWidgets('login page exposes account creation fields', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: LoginPage(),
+        home: LoginPage(allowAccountCreation: true),
       ),
     );
 
@@ -411,6 +543,15 @@ void main() {
     expect(find.text('CPF'), findsOneWidget);
     expect(find.text('Confirmar senha'), findsOneWidget);
     expect(find.text('Criar conta'), findsOneWidget);
+  });
+
+  testWidgets('production login hides public account creation', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: LoginPage()),
+    );
+
+    expect(find.text('Não tenho conta de login'), findsNothing);
+    expect(find.text('Entrar'), findsOneWidget);
   });
 
   testWidgets('profile page is available from app shell', (tester) async {

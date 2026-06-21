@@ -1,6 +1,7 @@
 {
-  "version": "0.1.0",
+  "version": "0.9.0",
   "windows_url": "",
-  "notes": "Versão inicial do Sistema RGT com Supabase, auditoria e demonstrativo mensal.",
+  "sha256": "",
+  "notes": "Candidato interno para homologação da V1. Ainda não publicado.",
   "mandatory": false
 }

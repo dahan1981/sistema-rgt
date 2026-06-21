@@ -12,6 +12,11 @@ class SupabaseConfig {
     'UPDATE_MANIFEST_URL',
   );
 
+  static const allowAccountSignup = bool.fromEnvironment(
+    'ALLOW_ACCOUNT_SIGNUP',
+    defaultValue: false,
+  );
+
   static bool get isConfigured =>
       url.trim().isNotEmpty && publishableKey.trim().isNotEmpty;
 }

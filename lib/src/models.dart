@@ -111,6 +111,9 @@ class CashClosingEntry {
     required this.amount,
     required this.description,
     required this.deductFromPayroll,
+    this.canceledAt,
+    this.cancellationReason,
+    this.correctionReason,
   });
 
   final String id;
@@ -121,6 +124,34 @@ class CashClosingEntry {
   final double amount;
   final String description;
   final bool deductFromPayroll;
+  final DateTime? canceledAt;
+  final String? cancellationReason;
+  final String? correctionReason;
+
+  bool get isCanceled => canceledAt != null;
+
+  CashClosingEntry copyWith({
+    double? amount,
+    String? description,
+    bool? deductFromPayroll,
+    DateTime? canceledAt,
+    String? cancellationReason,
+    String? correctionReason,
+  }) {
+    return CashClosingEntry(
+      id: id,
+      date: date,
+      unit: unit,
+      employee: employee,
+      type: type,
+      amount: amount ?? this.amount,
+      description: description ?? this.description,
+      deductFromPayroll: deductFromPayroll ?? this.deductFromPayroll,
+      canceledAt: canceledAt ?? this.canceledAt,
+      cancellationReason: cancellationReason ?? this.cancellationReason,
+      correctionReason: correctionReason ?? this.correctionReason,
+    );
+  }
 }
 
 class CashClosingSummary {

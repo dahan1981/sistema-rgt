@@ -64,7 +64,8 @@ class SupabaseRepository {
     final closingsRows = await _client
         .from('cash_closings')
         .select(
-          'id, entry_date, unit_id, collaborator_id, kind, amount, description, deduct_from_payroll',
+          'id, entry_date, unit_id, collaborator_id, kind, amount, description, '
+          'deduct_from_payroll, canceled_at, cancellation_reason, last_correction_reason',
         )
         .order('entry_date', ascending: false);
     final closings = closingsRows
@@ -79,6 +80,11 @@ class SupabaseRepository {
             amount: _number(row['amount']),
             description: row['description'] as String,
             deductFromPayroll: row['deduct_from_payroll'] as bool,
+            canceledAt: row['canceled_at'] == null
+                ? null
+                : DateTime.parse(row['canceled_at'] as String),
+            cancellationReason: row['cancellation_reason'] as String?,
+            correctionReason: row['last_correction_reason'] as String?,
           ),
         )
         .toList();
@@ -189,6 +195,32 @@ class SupabaseRepository {
     });
   }
 
+  Future<void> correctCashClosing(
+    CashClosingEntry entry,
+    String reason,
+  ) async {
+    await _client.rpc(
+      'correct_cash_closing',
+      params: {
+        'p_cash_closing_id': entry.id,
+        'p_amount': entry.amount,
+        'p_description': entry.description,
+        'p_deduct_from_payroll': entry.deductFromPayroll,
+        'p_reason': reason,
+      },
+    );
+  }
+
+  Future<void> cancelCashClosing(String id, String reason) async {
+    await _client.rpc(
+      'cancel_cash_closing',
+      params: {
+        'p_cash_closing_id': id,
+        'p_reason': reason,
+      },
+    );
+  }
+
   Future<void> saveStatement(MonthlyStatement statement) async {
     final referenceMonth = _monthStart(statement.referenceMonth);
     await _client.rpc(
@@ -236,10 +268,12 @@ class SupabaseRepository {
     var query = _client
         .from('cash_closings')
         .select(
-          'id, entry_date, unit_id, collaborator_id, kind, amount, description, deduct_from_payroll',
+          'id, entry_date, unit_id, collaborator_id, kind, amount, description, '
+          'deduct_from_payroll, canceled_at, cancellation_reason, last_correction_reason',
         )
         .gte('entry_date', _dateOnly(options.startDate))
-        .lte('entry_date', _dateOnly(options.endDate));
+        .lte('entry_date', _dateOnly(options.endDate))
+        .isFilter('canceled_at', null);
     if (options.unit != null && options.unit != Unit.geral) {
       query = query.eq('unit_id', _unitId(options.unit!));
     }
@@ -266,6 +300,11 @@ class SupabaseRepository {
             amount: _number(row['amount']),
             description: row['description'] as String,
             deductFromPayroll: row['deduct_from_payroll'] as bool,
+            canceledAt: row['canceled_at'] == null
+                ? null
+                : DateTime.parse(row['canceled_at'] as String),
+            cancellationReason: row['cancellation_reason'] as String?,
+            correctionReason: row['last_correction_reason'] as String?,
           ),
         )
         .toList();

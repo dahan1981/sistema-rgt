@@ -49,6 +49,8 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   User? _user;
   StreamSubscription<AuthState>? _authSubscription;
+  var _checkingAuthorization = false;
+  String? _accessError;
 
   @override
   void initState() {
@@ -57,13 +59,65 @@ class _AuthGateState extends State<AuthGate> {
       return;
     }
 
-    _user = Supabase.instance.client.auth.currentUser;
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    if (currentUser != null) {
+      unawaited(_authorize(currentUser));
+    }
     _authSubscription =
         Supabase.instance.client.auth.onAuthStateChange.listen((state) {
-      if (mounted) {
-        setState(() => _user = state.session?.user);
+      final user = state.session?.user;
+      if (user == null) {
+        if (mounted) {
+          setState(() {
+            _user = null;
+            _checkingAuthorization = false;
+          });
+        }
+      } else {
+        unawaited(_authorize(user));
       }
     });
+  }
+
+  Future<void> _authorize(User user) async {
+    if (mounted) {
+      setState(() {
+        _checkingAuthorization = true;
+        _accessError = null;
+      });
+    }
+
+    try {
+      final allowed =
+          await Supabase.instance.client.rpc('is_authorized_rgt_user') as bool;
+      if (!allowed) {
+        await Supabase.instance.client.auth.signOut();
+        if (mounted) {
+          setState(() {
+            _user = null;
+            _accessError =
+                'Este e-mail não está autorizado a acessar o Sistema RGT.';
+          });
+        }
+        return;
+      }
+      if (mounted) {
+        setState(() => _user = user);
+      }
+    } catch (_) {
+      await Supabase.instance.client.auth.signOut();
+      if (mounted) {
+        setState(() {
+          _user = null;
+          _accessError =
+              'Não foi possível validar a autorização deste usuário.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _checkingAuthorization = false);
+      }
+    }
   }
 
   @override
@@ -74,16 +128,33 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
-    if (!SupabaseConfig.isConfigured || _user != null) {
+    if (!SupabaseConfig.isConfigured) {
       return widget.child;
     }
 
-    return const LoginPage();
+    if (_checkingAuthorization) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_user != null) {
+      return widget.child;
+    }
+
+    return LoginPage(initialError: _accessError);
   }
 }
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({
+    this.allowAccountCreation = SupabaseConfig.allowAccountSignup,
+    this.initialError,
+    super.key,
+  });
+
+  final bool allowAccountCreation;
+  final String? initialError;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -100,6 +171,12 @@ class _LoginPageState extends State<LoginPage> {
   var _isSubmitting = false;
   String? _error;
   String? _successMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _error = widget.initialError;
+  }
 
   @override
   void dispose() {
@@ -331,14 +408,15 @@ class _LoginPageState extends State<LoginPage> {
                           Text(_isCreatingAccount ? 'Criar conta' : 'Entrar'),
                     ),
                     const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: _isSubmitting ? null : _toggleMode,
-                      child: Text(
-                        _isCreatingAccount
-                            ? 'Já tenho conta'
-                            : 'Não tenho conta de login',
+                    if (widget.allowAccountCreation)
+                      TextButton(
+                        onPressed: _isSubmitting ? null : _toggleMode,
+                        child: Text(
+                          _isCreatingAccount
+                              ? 'Já tenho conta'
+                              : 'Não tenho conta de login',
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -1205,7 +1283,18 @@ class _RgtHomePageState extends State<RgtHomePage> {
         return UpdateAvailableDialog(
           update: update,
           onDownload: () async {
-            await _updateChecker.openDownload(update);
+            final started = await _updateChecker.downloadAndInstall(update);
+            if (!started && context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'A atualização não pôde ser validada ou iniciada.',
+                  ),
+                  backgroundColor: Color(0xFF8E2F2F),
+                ),
+              );
+              return;
+            }
             if (context.mounted && !update.mandatory) {
               Navigator.of(context).pop();
             }
@@ -1396,6 +1485,55 @@ class _RgtHomePageState extends State<RgtHomePage> {
       }
     } catch (_) {
       _showError('Não foi possível salvar o fechamento de caixa.');
+      rethrow;
+    }
+  }
+
+  Future<void> _correctCashClosing(
+    CashClosingEntry entry,
+    String reason,
+  ) async {
+    try {
+      await _persist(
+        (repository) => repository.correctCashClosing(entry, reason),
+      );
+      if (mounted) {
+        setState(() {
+          final index = _cashClosings.indexWhere((item) => item.id == entry.id);
+          if (index >= 0) {
+            _cashClosings[index] = entry.copyWith(correctionReason: reason);
+          }
+        });
+        _showSuccess('Fechamento de caixa corrigido.');
+      }
+    } catch (_) {
+      _showError('Não foi possível corrigir o fechamento de caixa.');
+      rethrow;
+    }
+  }
+
+  Future<void> _cancelCashClosing(
+    CashClosingEntry entry,
+    String reason,
+  ) async {
+    try {
+      await _persist(
+        (repository) => repository.cancelCashClosing(entry.id, reason),
+      );
+      if (mounted) {
+        setState(() {
+          final index = _cashClosings.indexWhere((item) => item.id == entry.id);
+          if (index >= 0) {
+            _cashClosings[index] = entry.copyWith(
+              canceledAt: DateTime.now(),
+              cancellationReason: reason,
+            );
+          }
+        });
+        _showSuccess('Fechamento de caixa cancelado.');
+      }
+    } catch (_) {
+      _showError('Não foi possível cancelar o fechamento de caixa.');
       rethrow;
     }
   }
@@ -1616,7 +1754,10 @@ class _RgtHomePageState extends State<RgtHomePage> {
       final inPeriod =
           !date.isBefore(options.startDate) && !date.isAfter(options.endDate);
       final inUnit = options.unit == null || entry.unit == options.unit;
-      return inPeriod && inUnit && selectedIds.contains(entry.employee.id);
+      return !entry.isCanceled &&
+          inPeriod &&
+          inUnit &&
+          selectedIds.contains(entry.employee.id);
     }).toList();
 
     return ReportData(
@@ -1686,6 +1827,8 @@ class _RgtHomePageState extends State<RgtHomePage> {
           return _effectiveUnitFor(_currentEmployeeById(employee.id), date);
         },
         onCashClosingAdded: _addCashClosing,
+        onCashClosingCorrected: _correctCashClosing,
+        onCashClosingCanceled: _cancelCashClosing,
       ),
       const ProfilePage(),
       const AuditPage(),
@@ -2575,6 +2718,9 @@ class CashClosingReportSummary {
     var payrollDeductions = 0.0;
 
     for (final entry in entries) {
+      if (entry.isCanceled) {
+        continue;
+      }
       if (entry.type == CashClosingType.positive) {
         positive += entry.amount;
       } else {
@@ -3607,6 +3753,8 @@ class StatementPage extends StatelessWidget {
     required this.onEmployeeSelected,
     required this.effectiveUnitForDate,
     required this.onCashClosingAdded,
+    required this.onCashClosingCorrected,
+    required this.onCashClosingCanceled,
     super.key,
   });
 
@@ -3624,6 +3772,8 @@ class StatementPage extends StatelessWidget {
   final ValueChanged<Employee> onEmployeeSelected;
   final Unit Function(Employee employee, DateTime date) effectiveUnitForDate;
   final Future<void> Function(CashClosingEntry) onCashClosingAdded;
+  final Future<void> Function(CashClosingEntry, String) onCashClosingCorrected;
+  final Future<void> Function(CashClosingEntry, String) onCashClosingCanceled;
 
   @override
   Widget build(BuildContext context) {
@@ -3790,6 +3940,8 @@ class StatementPage extends StatelessWidget {
           onEmployeeSelected: onEmployeeSelected,
           effectiveUnitForDate: effectiveUnitForDate,
           onEntryAdded: onCashClosingAdded,
+          onEntryCorrected: onCashClosingCorrected,
+          onEntryCanceled: onCashClosingCanceled,
           embedded: true,
         ),
       ],
@@ -3807,6 +3959,8 @@ class CashClosingPage extends StatefulWidget {
     required this.onEmployeeSelected,
     required this.effectiveUnitForDate,
     required this.onEntryAdded,
+    required this.onEntryCorrected,
+    required this.onEntryCanceled,
     this.embedded = false,
     super.key,
   });
@@ -3819,6 +3973,8 @@ class CashClosingPage extends StatefulWidget {
   final ValueChanged<Employee> onEmployeeSelected;
   final Unit Function(Employee employee, DateTime date) effectiveUnitForDate;
   final Future<void> Function(CashClosingEntry) onEntryAdded;
+  final Future<void> Function(CashClosingEntry, String) onEntryCorrected;
+  final Future<void> Function(CashClosingEntry, String) onEntryCanceled;
   final bool embedded;
 
   @override
@@ -3880,6 +4036,9 @@ class _CashClosingPageState extends State<CashClosingPage> {
     var payrollDeductions = 0.0;
 
     for (final entry in _visibleEntries) {
+      if (entry.isCanceled) {
+        continue;
+      }
       if (entry.type == CashClosingType.positive) {
         positive += entry.amount;
       } else {
@@ -3947,6 +4106,36 @@ class _CashClosingPageState extends State<CashClosingPage> {
       if (mounted) {
         setState(() => _isSaving = false);
       }
+    }
+  }
+
+  Future<void> _editEntry(CashClosingEntry entry) async {
+    final result = await showDialog<CashClosingCorrection>(
+      context: context,
+      builder: (context) => CashClosingCorrectionDialog(entry: entry),
+    );
+    if (result == null) {
+      return;
+    }
+    try {
+      await widget.onEntryCorrected(result.entry, result.reason);
+    } catch (_) {
+      // A tela principal apresenta a mensagem de falha.
+    }
+  }
+
+  Future<void> _cancelEntry(CashClosingEntry entry) async {
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (context) => const CashClosingCancellationDialog(),
+    );
+    if (reason == null) {
+      return;
+    }
+    try {
+      await widget.onEntryCanceled(entry, reason);
+    } catch (_) {
+      // A tela principal apresenta a mensagem de falha.
     }
   }
 
@@ -4126,7 +4315,15 @@ class _CashClosingPageState extends State<CashClosingPage> {
                 ? const Text('Nenhum lançamento neste filtro.')
                 : Column(
                     children: [
-                      for (final entry in entries) CashClosingRow(entry: entry),
+                      for (final entry in entries)
+                        CashClosingRow(
+                          entry: entry,
+                          onEdit:
+                              entry.isCanceled ? null : () => _editEntry(entry),
+                          onCancel: entry.isCanceled
+                              ? null
+                              : () => _cancelEntry(entry),
+                        ),
                     ],
                   ),
           ),
@@ -4148,16 +4345,200 @@ class _CashClosingPageState extends State<CashClosingPage> {
   }
 }
 
-class CashClosingRow extends StatelessWidget {
-  const CashClosingRow({required this.entry, super.key});
+class CashClosingCorrection {
+  const CashClosingCorrection({required this.entry, required this.reason});
+
+  final CashClosingEntry entry;
+  final String reason;
+}
+
+class CashClosingCorrectionDialog extends StatefulWidget {
+  const CashClosingCorrectionDialog({required this.entry, super.key});
 
   final CashClosingEntry entry;
 
   @override
+  State<CashClosingCorrectionDialog> createState() =>
+      _CashClosingCorrectionDialogState();
+}
+
+class _CashClosingCorrectionDialogState
+    extends State<CashClosingCorrectionDialog> {
+  late final TextEditingController _descriptionController;
+  final _reasonController = TextEditingController();
+  late double _amount = widget.entry.amount;
+  late bool _deductFromPayroll = widget.entry.deductFromPayroll;
+
+  @override
+  void initState() {
+    super.initState();
+    _descriptionController =
+        TextEditingController(text: widget.entry.description);
+  }
+
+  @override
+  void dispose() {
+    _descriptionController.dispose();
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  bool get _canSubmit =>
+      _amount > 0 &&
+      _descriptionController.text.trim().length >= 3 &&
+      _reasonController.text.trim().length >= 5;
+
+  void _submit() {
+    Navigator.of(context).pop(
+      CashClosingCorrection(
+        entry: widget.entry.copyWith(
+          amount: _amount,
+          description: _descriptionController.text.trim(),
+          deductFromPayroll: widget.entry.type == CashClosingType.negative &&
+              _deductFromPayroll,
+        ),
+        reason: _reasonController.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Corrigir lançamento'),
+      content: SizedBox(
+        width: 440,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            MoneyField(
+              label: 'Valor corrigido',
+              value: _amount,
+              onChanged: (value) => setState(() => _amount = value),
+            ),
+            TextField(
+              controller: _descriptionController,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                labelText: 'Descrição',
+              ),
+            ),
+            if (widget.entry.type == CashClosingType.negative)
+              SwitchRow(
+                label: 'Descontar de folha salarial',
+                value: _deductFromPayroll,
+                onChanged: (value) {
+                  setState(() => _deductFromPayroll = value);
+                },
+              ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _reasonController,
+              onChanged: (_) => setState(() {}),
+              maxLines: 2,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                labelText: 'Justificativa obrigatória',
+                helperText: 'Informe o motivo da correção.',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Voltar'),
+        ),
+        FilledButton.icon(
+          onPressed: _canSubmit ? _submit : null,
+          icon: const Icon(Icons.save_outlined),
+          label: const Text('Salvar correção'),
+        ),
+      ],
+    );
+  }
+}
+
+class CashClosingCancellationDialog extends StatefulWidget {
+  const CashClosingCancellationDialog({super.key});
+
+  @override
+  State<CashClosingCancellationDialog> createState() =>
+      _CashClosingCancellationDialogState();
+}
+
+class _CashClosingCancellationDialogState
+    extends State<CashClosingCancellationDialog> {
+  final _reasonController = TextEditingController();
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Cancelar lançamento'),
+      content: SizedBox(
+        width: 420,
+        child: TextField(
+          controller: _reasonController,
+          onChanged: (_) => setState(() {}),
+          maxLines: 3,
+          autofocus: true,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            labelText: 'Justificativa obrigatória',
+            helperText: 'O lançamento continuará disponível na auditoria.',
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Voltar'),
+        ),
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF8E2F2F),
+          ),
+          onPressed: _reasonController.text.trim().length >= 5
+              ? () => Navigator.of(context).pop(
+                    _reasonController.text.trim(),
+                  )
+              : null,
+          icon: const Icon(Icons.cancel_outlined),
+          label: const Text('Confirmar cancelamento'),
+        ),
+      ],
+    );
+  }
+}
+
+class CashClosingRow extends StatelessWidget {
+  const CashClosingRow({
+    required this.entry,
+    this.onEdit,
+    this.onCancel,
+    super.key,
+  });
+
+  final CashClosingEntry entry;
+  final VoidCallback? onEdit;
+  final VoidCallback? onCancel;
+
+  @override
   Widget build(BuildContext context) {
     final isNegative = entry.type == CashClosingType.negative;
-    final color =
-        isNegative ? const Color(0xFF8E2F2F) : const Color(0xFF245B57);
+    final color = entry.isCanceled
+        ? const Color(0xFF6D7470)
+        : isNegative
+            ? const Color(0xFF8E2F2F)
+            : const Color(0xFF245B57);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -4185,7 +4566,26 @@ class CashClosingRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text('${formatDate(entry.date)} - ${entry.employee.name}'),
-                if (entry.deductFromPayroll)
+                if (entry.isCanceled) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Cancelado: ${entry.cancellationReason}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF8E2F2F),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+                if (!entry.isCanceled && entry.correctionReason != null)
+                  Text(
+                    'Última correção: ${entry.correctionReason}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF5E6762),
+                    ),
+                  ),
+                if (!entry.isCanceled && entry.deductFromPayroll)
                   const Text(
                     'Descontar de folha salarial',
                     style: TextStyle(fontSize: 12, color: Color(0xFF8E2F2F)),
@@ -4195,8 +4595,39 @@ class CashClosingRow extends StatelessWidget {
           ),
           Text(
             formatCurrency(entry.amount),
-            style: TextStyle(color: color, fontWeight: FontWeight.w800),
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w800,
+              decoration: entry.isCanceled ? TextDecoration.lineThrough : null,
+            ),
           ),
+          if (onEdit != null || onCancel != null)
+            PopupMenuButton<String>(
+              tooltip: 'Ações do lançamento',
+              onSelected: (action) {
+                if (action == 'edit') {
+                  onEdit?.call();
+                } else if (action == 'cancel') {
+                  onCancel?.call();
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: 'edit',
+                  child: ListTile(
+                    leading: Icon(Icons.edit_outlined),
+                    title: Text('Corrigir lançamento'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'cancel',
+                  child: ListTile(
+                    leading: Icon(Icons.cancel_outlined),
+                    title: Text('Cancelar lançamento'),
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );

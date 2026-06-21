@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -14,6 +15,7 @@ class UpdateInfo {
     required this.downloadUri,
     required this.notes,
     required this.mandatory,
+    required this.sha256Hash,
   });
 
   final String currentVersion;
@@ -21,15 +23,20 @@ class UpdateInfo {
   final Uri downloadUri;
   final String notes;
   final bool mandatory;
+  final String sha256Hash;
 }
 
 class UpdateChecker {
-  const UpdateChecker({http.Client? client}) : _client = client;
+  const UpdateChecker({http.Client? client, String? manifestUrl})
+      : _client = client,
+        _manifestUrl = manifestUrl;
 
   final http.Client? _client;
+  final String? _manifestUrl;
 
   Future<UpdateInfo?> check() async {
-    final manifestUrl = SupabaseConfig.updateManifestUrl.trim();
+    final manifestUrl =
+        (_manifestUrl ?? SupabaseConfig.updateManifestUrl).trim();
     if (manifestUrl.isEmpty) {
       return null;
     }
@@ -52,10 +59,13 @@ class UpdateChecker {
       final manifest = jsonDecode(response.body) as Map<String, dynamic>;
       final latestVersion = (manifest['version'] as String?)?.trim();
       final downloadUrl = _downloadUrlForPlatform(manifest);
+      final sha256Hash = (manifest['sha256'] as String?)?.trim().toLowerCase();
       if (latestVersion == null ||
           latestVersion.isEmpty ||
           downloadUrl == null ||
-          downloadUrl.isEmpty) {
+          downloadUrl.isEmpty ||
+          sha256Hash == null ||
+          !RegExp(r'^[a-f0-9]{64}$').hasMatch(sha256Hash)) {
         return null;
       }
 
@@ -76,6 +86,7 @@ class UpdateChecker {
         downloadUri: downloadUri,
         notes: (manifest['notes'] as String?)?.trim() ?? '',
         mandatory: manifest['mandatory'] == true,
+        sha256Hash: sha256Hash,
       );
     } catch (_) {
       return null;
@@ -86,8 +97,51 @@ class UpdateChecker {
     }
   }
 
-  Future<bool> openDownload(UpdateInfo update) {
-    return launchUrl(update.downloadUri, mode: LaunchMode.externalApplication);
+  Future<bool> downloadAndInstall(UpdateInfo update) async {
+    if (!Platform.isWindows) {
+      return launchUrl(
+        update.downloadUri,
+        mode: LaunchMode.externalApplication,
+      );
+    }
+
+    final client = _client ?? http.Client();
+    final shouldCloseClient = _client == null;
+    try {
+      final response = await client
+          .get(update.downloadUri)
+          .timeout(const Duration(minutes: 5));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return false;
+      }
+
+      final actualHash = sha256.convert(response.bodyBytes).toString();
+      if (actualHash != update.sha256Hash) {
+        return false;
+      }
+
+      final safeVersion = update.latestVersion.replaceAll(
+        RegExp(r'[^0-9A-Za-z._-]'),
+        '_',
+      );
+      final installer = File(
+        '${Directory.systemTemp.path}${Platform.pathSeparator}'
+        'SistemaRGT-Setup-$safeVersion.exe',
+      );
+      await installer.writeAsBytes(response.bodyBytes, flush: true);
+      await Process.start(
+        installer.path,
+        const [],
+        mode: ProcessStartMode.detached,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      if (shouldCloseClient) {
+        client.close();
+      }
+    }
   }
 
   String? _downloadUrlForPlatform(Map<String, dynamic> manifest) {

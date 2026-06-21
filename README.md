@@ -3,6 +3,8 @@
 Aplicativo Flutter para controle mensal de entradas, saídas, incentivos,
 fechamentos de caixa e histórico de colaboradores.
 
+Versão atual: `0.9.0+3`, candidata à homologação da V1.
+
 ## Stack
 
 | Parte | Tecnologia | Linguagem |
@@ -27,6 +29,9 @@ fechamentos de caixa e histórico de colaboradores.
 - Relatórios por competência, período, banca e colaboradores.
 - Exportação dos relatórios em PDF e Excel.
 - Atualizações Windows distribuídas pelo Supabase Storage.
+- Acesso restrito a e-mails previamente autorizados.
+- Correção e cancelamento auditável de fechamentos de caixa.
+- Validação SHA-256 dos instaladores de atualização.
 
 Os campos financeiros iniciam vazios. O aplicativo não preenche valores de
 exemplo quando ainda não existe demonstrativo no banco.
@@ -34,9 +39,10 @@ exemplo quando ainda não existe demonstrativo no banco.
 ## Configuração do Supabase
 
 1. Execute `supabase/schema.sql` no SQL Editor do projeto.
-2. Execute `supabase/storage.sql` para preparar as atualizações Windows.
-3. Configure os templates de `supabase/email-templates.md` no painel do Auth.
-4. Copie `tools/start_windows.local.ps1` para o ambiente local e informe apenas
+2. Autorize os dois usuários conforme `supabase/authorize-users.example.sql`.
+3. Execute `supabase/storage.sql` para preparar as atualizações Windows.
+4. Configure os templates de `supabase/email-templates.md` no painel do Auth.
+5. Copie `tools/start_windows.local.ps1` para o ambiente local e informe apenas
    a publishable key. Esse arquivo é ignorado pelo Git.
 
 Nunca coloque senha PostgreSQL, `service_role` ou outras credenciais privadas
