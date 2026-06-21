@@ -1,34 +1,54 @@
 # Sistema RGT
 
-Aplicativo Flutter para controle mensal de entradas, saídas, incentivos e resumo financeiro de colaboradores.
+Aplicativo Flutter para controle mensal de entradas, saídas, incentivos,
+fechamentos de caixa e histórico de colaboradores.
 
-## Stack definida
+## Stack
 
 | Parte | Tecnologia | Linguagem |
 | --- | --- | --- |
-| App mobile | Flutter | Dart |
-| App desktop | Flutter Desktop | Dart |
-| Banco futuro | Supabase / PostgreSQL | SQL |
-| Login futuro | Supabase Auth | Dart / configuração |
-| Permissões futuras | Supabase RLS | SQL |
-| Automações futuras | Supabase Edge Functions | TypeScript |
-| Relatórios futuros | Flutter + Edge Functions | Dart / TypeScript |
+| Aplicativo mobile | Flutter | Dart |
+| Aplicativo Windows | Flutter Desktop | Dart |
+| Banco de dados | Supabase / PostgreSQL | SQL |
+| Autenticação | Supabase Auth | Dart |
+| Permissões | Supabase RLS | SQL |
+| Relatórios | PDF e Excel | Dart |
 
-## Estado atual
+## Funcionalidades
 
-Esta primeira versão tem:
+- Painel global por banca e colaborador.
+- Cadastro e alteração temporária de banca com histórico.
+- Demonstrativo mensal por competência.
+- Lançamento de faltas com seleção individual de despesa.
+- Fechamento de caixa positivo e negativo.
+- Desconto em folha para caixas negativos.
+- Persistência transacional do demonstrativo mensal.
+- Auditoria de inclusões, alterações e exclusões.
+- Relatórios por competência, período, banca e colaboradores.
+- Exportação dos relatórios em PDF e Excel.
+- Atualizações Windows distribuídas pelo Supabase Storage.
 
-- Layout responsivo para mobile e desktop.
-- Painel de indicadores.
-- Lista de colaboradores por unidade.
-- Demonstrativo mensal com formulário financeiro.
-- Cálculo local do passivo circulante final.
-- Estrutura sem dependência externa, para facilitar a primeira execução.
+Os campos financeiros iniciam vazios. O aplicativo não preenche valores de
+exemplo quando ainda não existe demonstrativo no banco.
 
-## Próximos passos técnicos
+## Configuração do Supabase
 
-1. Rodar `flutter create . --platforms=android,windows,linux,macos,ios` para gerar os projetos nativos quando o SDK Flutter estiver respondendo.
-2. Rodar `flutter pub get`.
-3. Integrar Supabase Auth, banco PostgreSQL e RLS.
-4. Criar tabelas, funções SQL e trilha de auditoria.
-5. Adicionar exportação PDF/Excel.
+1. Execute `supabase/schema.sql` no SQL Editor do projeto.
+2. Execute `supabase/storage.sql` para preparar as atualizações Windows.
+3. Configure os templates de `supabase/email-templates.md` no painel do Auth.
+4. Copie `tools/start_windows.local.ps1` para o ambiente local e informe apenas
+   a publishable key. Esse arquivo é ignorado pelo Git.
+
+Nunca coloque senha PostgreSQL, `service_role` ou outras credenciais privadas
+no aplicativo.
+
+## Desenvolvimento
+
+```powershell
+flutter pub get
+flutter test
+flutter analyze
+```
+
+No Windows, use `tools/start_windows.ps1` para compilar e abrir o aplicativo
+com as configurações locais e o manifesto de atualização.

@@ -31,7 +31,7 @@ create table if not exists public.monthly_statements (
   salary_forecast numeric(12, 2) not null default 0,
   vouchers numeric(12, 2) not null default 0,
   attendance_score integer not null default 0 check (attendance_score >= 0),
-  incentive_score integer not null default 1 check (incentive_score between 1 and 3),
+  incentive_score integer check (incentive_score between 1 and 3),
   incentive_amount numeric(12, 2) not null default 0,
   balance_bonus numeric(12, 2) not null default 0,
   launch_balance_bonus_as_revenue boolean not null default false,
@@ -78,8 +78,14 @@ create table if not exists public.cash_closings (
 create index if not exists unit_assignments_lookup_idx
 on public.unit_assignments (collaborator_id, assigned_date);
 
+create index if not exists collaborators_base_unit_idx
+on public.collaborators (base_unit_id);
+
 create index if not exists monthly_statements_lookup_idx
 on public.monthly_statements (reference_month, collaborator_id);
+
+create index if not exists monthly_statements_collaborator_idx
+on public.monthly_statements (collaborator_id);
 
 create index if not exists absence_entries_statement_idx
 on public.absence_entries (monthly_statement_id, absence_date);
@@ -89,6 +95,12 @@ on public.negative_cash_entries (monthly_statement_id, entry_date);
 
 create index if not exists cash_closings_month_lookup_idx
 on public.cash_closings (entry_date, unit_id, collaborator_id);
+
+create index if not exists cash_closings_collaborator_idx
+on public.cash_closings (collaborator_id);
+
+create index if not exists cash_closings_unit_idx
+on public.cash_closings (unit_id);
 
 create table if not exists public.audit_log (
   id bigserial primary key,
@@ -134,6 +146,10 @@ alter table public.cash_closings
   add column if not exists updated_at timestamptz not null default now(),
   add column if not exists created_by uuid references auth.users(id),
   add column if not exists updated_by uuid references auth.users(id);
+
+alter table public.monthly_statements
+  alter column incentive_score drop not null,
+  alter column incentive_score drop default;
 
 create index if not exists audit_log_table_record_idx
 on public.audit_log (table_name, record_id, occurred_at desc);
@@ -272,6 +288,122 @@ create trigger cash_closings_audit_log
 after insert or update or delete on public.cash_closings
 for each row execute function public.write_audit_log();
 
+create or replace function public.save_monthly_statement(
+  p_collaborator_id text,
+  p_reference_month date,
+  p_salary_forecast numeric,
+  p_vouchers numeric,
+  p_attendance_score integer,
+  p_incentive_score integer,
+  p_balance_bonus numeric,
+  p_launch_balance_bonus_as_revenue boolean,
+  p_launch_negative_cash_as_expense boolean,
+  p_absences jsonb,
+  p_negative_cash_entries jsonb
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  target_statement_id uuid;
+begin
+  if p_reference_month <> date_trunc('month', p_reference_month)::date then
+    raise exception 'A competência deve ser o primeiro dia do mês.';
+  end if;
+
+  if p_incentive_score is not null and p_incentive_score not between 1 and 3 then
+    raise exception 'A pontuação de incentivo deve estar entre 1 e 3.';
+  end if;
+
+  insert into public.monthly_statements (
+    collaborator_id,
+    reference_month,
+    salary_forecast,
+    vouchers,
+    attendance_score,
+    incentive_score,
+    incentive_amount,
+    balance_bonus,
+    launch_balance_bonus_as_revenue,
+    launch_negative_cash_as_expense
+  )
+  values (
+    p_collaborator_id,
+    p_reference_month,
+    p_salary_forecast,
+    p_vouchers,
+    p_attendance_score,
+    p_incentive_score,
+    case p_incentive_score
+      when 1 then 50
+      when 2 then 100
+      when 3 then 150
+      else 0
+    end,
+    p_balance_bonus,
+    p_launch_balance_bonus_as_revenue,
+    p_launch_negative_cash_as_expense
+  )
+  on conflict (collaborator_id, reference_month) do update
+  set
+    salary_forecast = excluded.salary_forecast,
+    vouchers = excluded.vouchers,
+    attendance_score = excluded.attendance_score,
+    incentive_score = excluded.incentive_score,
+    incentive_amount = excluded.incentive_amount,
+    balance_bonus = excluded.balance_bonus,
+    launch_balance_bonus_as_revenue = excluded.launch_balance_bonus_as_revenue,
+    launch_negative_cash_as_expense = excluded.launch_negative_cash_as_expense
+  returning id into target_statement_id;
+
+  delete from public.absence_entries
+  where monthly_statement_id = target_statement_id;
+
+  insert into public.absence_entries (
+    monthly_statement_id,
+    absence_date,
+    as_expense
+  )
+  select
+    target_statement_id,
+    item.absence_date,
+    item.as_expense
+  from jsonb_to_recordset(coalesce(p_absences, '[]'::jsonb))
+    as item(absence_date date, as_expense boolean);
+
+  delete from public.negative_cash_entries
+  where monthly_statement_id = target_statement_id;
+
+  insert into public.negative_cash_entries (
+    monthly_statement_id,
+    entry_date,
+    description,
+    amount
+  )
+  select
+    target_statement_id,
+    item.entry_date,
+    trim(item.description),
+    item.amount
+  from jsonb_to_recordset(coalesce(p_negative_cash_entries, '[]'::jsonb))
+    as item(entry_date date, description text, amount numeric)
+  where item.amount > 0 and trim(item.description) <> '';
+
+  return target_statement_id;
+end;
+$$;
+
+revoke all on function public.save_monthly_statement(
+  text, date, numeric, numeric, integer, integer, numeric,
+  boolean, boolean, jsonb, jsonb
+) from public;
+grant execute on function public.save_monthly_statement(
+  text, date, numeric, numeric, integer, integer, numeric,
+  boolean, boolean, jsonb, jsonb
+) to authenticated;
+
 create or replace function public.effective_unit_for_collaborator(
   target_collaborator_id text,
   target_date date
@@ -367,8 +499,8 @@ as $$
         b.collaborator_id,
         cc.entry_date
       )
-      and cc.entry_date >= date_trunc('month', current_date)::date
-      and cc.entry_date <= current_date
+      and cc.entry_date >= b.reference_month
+      and cc.entry_date < (b.reference_month + interval '1 month')::date
   )
   select
     (

@@ -1,6 +1,7 @@
 import 'models.dart';
 
-const sampleEmployees = [
+// Cadastro inicial real. Os dados financeiros permanecem vazios até o RH lançar.
+const initialEmployees = [
   Employee(id: 'lar-1', name: 'Daniele', unit: Unit.laranj),
   Employee(id: 'lar-2', name: 'Kethelyn', unit: Unit.laranj),
   Employee(id: 'lar-3', name: 'Priscila', unit: Unit.largoDoMachado),
@@ -25,59 +26,19 @@ const sampleEmployees = [
   Employee(id: 'adm-7', name: 'Thais', unit: Unit.adm),
 ];
 
-final sampleCashClosings = [
-  CashClosingEntry(
-    id: 'cx-1',
-    date: DateTime(2026, 6, 3),
-    unit: Unit.laranj,
-    employee: sampleEmployees[0],
-    type: CashClosingType.positive,
-    amount: 84.50,
-    description: 'Sobra de fechamento',
-    deductFromPayroll: false,
-  ),
-  CashClosingEntry(
-    id: 'cx-2',
-    date: DateTime(2026, 6, 5),
-    unit: Unit.laranj,
-    employee: sampleEmployees[1],
-    type: CashClosingType.negative,
-    amount: 42.00,
-    description: 'Diferença no caixa',
-    deductFromPayroll: true,
-  ),
-  CashClosingEntry(
-    id: 'cx-3',
-    date: DateTime(2026, 6, 8),
-    unit: Unit.largoDoMachado,
-    employee: sampleEmployees[2],
-    type: CashClosingType.positive,
-    amount: 31.75,
-    description: 'Ajuste de conferência',
-    deductFromPayroll: false,
-  ),
-];
-
-MonthlyStatement sampleStatement(Employee employee) {
+MonthlyStatement emptyStatement(Employee employee, {DateTime? competence}) {
+  final reference = competence ?? DateTime.now();
   return MonthlyStatement(
     employee: employee,
-    referenceMonth: DateTime(2026, 6),
-    salaryForecast: 2450,
-    vouchers: 180,
-    absences: [
-      AbsenceEntry(date: DateTime(2026, 6, 10), asExpense: true),
-    ],
-    attendanceScore: 94,
-    incentive: Incentive.score2,
-    balanceBonus: 70,
-    launchBalanceBonusAsRevenue: true,
-    negativeCashEntries: [
-      CashEntry(
-        date: DateTime(2026, 6, 12),
-        description: 'Diferença de caixa',
-        amount: 35,
-      ),
-    ],
-    launchNegativeCashAsExpense: true,
+    referenceMonth: DateTime(reference.year, reference.month),
+    salaryForecast: 0,
+    vouchers: 0,
+    absences: const [],
+    attendanceScore: 0,
+    incentive: null,
+    balanceBonus: 0,
+    launchBalanceBonusAsRevenue: false,
+    negativeCashEntries: const [],
+    launchNegativeCashAsExpense: false,
   );
 }

@@ -6,7 +6,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'calculator.dart';
 import 'models.dart';
-import 'sample_data.dart';
+import 'initial_data.dart';
+import 'report_file_saver.dart';
+import 'report_exporter.dart';
 import 'supabase_config.dart';
 import 'supabase_repository.dart';
 import 'update_checker.dart';
@@ -1164,16 +1166,16 @@ class _RgtHomePageState extends State<RgtHomePage> {
   final _updateChecker = const UpdateChecker();
   SupabaseRepository? _repository;
   var _selectedIndex = 0;
-  late List<Employee> _employees = [...sampleEmployees];
+  late List<Employee> _employees = [...initialEmployees];
   late Employee _selectedEmployee = _employees.first;
   late Unit _selectedUnit =
       _effectiveUnitFor(_selectedEmployee, DateTime.now());
   Unit? _dashboardUnitFilter;
   final List<UnitAssignment> _unitAssignments = [];
-  late final List<CashClosingEntry> _cashClosings = [
-    ...sampleCashClosings,
-  ];
+  final List<CashClosingEntry> _cashClosings = [];
+  final Map<String, MonthlyStatement> _statementsByEmployee = {};
   late MonthlyStatement _statement = _statementFor(_selectedEmployee);
+  var _isSavingStatement = false;
 
   @override
   void initState() {
@@ -1224,13 +1226,13 @@ class _RgtHomePageState extends State<RgtHomePage> {
       final selectedEmployee = snapshot.employees.isEmpty
           ? _selectedEmployee
           : snapshot.employees.first;
-      final statement = await repository.fetchStatement(
-        _employeeWithEffectiveUnitFrom(
-          selectedEmployee,
-          DateTime.now(),
-          snapshot.unitAssignments,
-        ),
+      final effectiveSelectedEmployee = _employeeWithEffectiveUnitFrom(
+        selectedEmployee,
+        DateTime.now(),
+        snapshot.unitAssignments,
       );
+      final statement = snapshot.statements[selectedEmployee.id] ??
+          emptyStatement(effectiveSelectedEmployee);
 
       if (!mounted) {
         return;
@@ -1249,9 +1251,14 @@ class _RgtHomePageState extends State<RgtHomePage> {
         _cashClosings
           ..clear()
           ..addAll(snapshot.cashClosings);
+        _statementsByEmployee
+          ..clear()
+          ..addAll(snapshot.statements);
         _statement = statement;
       });
-    } catch (_) {}
+    } catch (_) {
+      _showError('Não foi possível carregar os dados do Supabase.');
+    }
   }
 
   Employee _employeeWithEffectiveUnit(Employee employee, DateTime date) {
@@ -1305,8 +1312,7 @@ class _RgtHomePageState extends State<RgtHomePage> {
   }
 
   MonthlyStatement _statementFor(Employee employee) {
-    return sampleStatement(
-        _employeeWithEffectiveUnit(employee, DateTime.now()));
+    return emptyStatement(_employeeWithEffectiveUnit(employee, DateTime.now()));
   }
 
   Employee _currentEmployeeById(String id) {
@@ -1327,7 +1333,10 @@ class _RgtHomePageState extends State<RgtHomePage> {
     );
   }
 
-  Future<void> _loadStatement(Employee employee) async {
+  Future<void> _loadStatement(
+    Employee employee, {
+    DateTime? competence,
+  }) async {
     final repository = _repository;
     if (repository == null || !repository.canPersist) {
       return;
@@ -1336,12 +1345,22 @@ class _RgtHomePageState extends State<RgtHomePage> {
     try {
       final effectiveEmployee =
           _employeeWithEffectiveUnit(employee, DateTime.now());
-      final statement = await repository.fetchStatement(effectiveEmployee);
+      final statement = await repository.fetchStatement(
+        effectiveEmployee,
+        competence: competence,
+      );
       if (mounted && _selectedEmployee.id == employee.id) {
-        setState(() => _statement = statement);
+        setState(() {
+          _statement = statement;
+          final now = DateTime.now();
+          if (statement.referenceMonth.year == now.year &&
+              statement.referenceMonth.month == now.month) {
+            _statementsByEmployee[employee.id] = statement;
+          }
+        });
       }
     } catch (_) {
-      return;
+      _showError('Não foi possível carregar o demonstrativo mensal.');
     }
   }
 
@@ -1368,18 +1387,38 @@ class _RgtHomePageState extends State<RgtHomePage> {
     });
   }
 
-  void _addCashClosing(CashClosingEntry entry) {
-    setState(() {
-      _cashClosings.insert(0, entry);
-    });
-    unawaited(_persist((repository) => repository.addCashClosing(entry)));
+  Future<void> _addCashClosing(CashClosingEntry entry) async {
+    try {
+      await _persist((repository) => repository.addCashClosing(entry));
+      if (mounted) {
+        setState(() => _cashClosings.insert(0, entry));
+        _showSuccess('Fechamento de caixa salvo.');
+      }
+    } catch (_) {
+      _showError('Não foi possível salvar o fechamento de caixa.');
+      rethrow;
+    }
   }
 
-  void _updateEmployee(Employee updatedEmployee) {
+  Future<void> _updateEmployee(Employee updatedEmployee) async {
+    try {
+      await _persist((repository) => repository.saveEmployee(updatedEmployee));
+    } catch (_) {
+      _showError('Não foi possível salvar o colaborador.');
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _employees = _employees.map((employee) {
         return employee.id == updatedEmployee.id ? updatedEmployee : employee;
       }).toList();
+      final savedStatement = _statementsByEmployee[updatedEmployee.id];
+      if (savedStatement != null) {
+        _statementsByEmployee[updatedEmployee.id] =
+            savedStatement.copyWith(employee: updatedEmployee);
+      }
       if (_selectedEmployee.id == updatedEmployee.id) {
         _selectedEmployee = updatedEmployee;
         _selectedUnit = _effectiveUnitFor(updatedEmployee, DateTime.now());
@@ -1388,12 +1427,26 @@ class _RgtHomePageState extends State<RgtHomePage> {
         );
       }
     });
-    unawaited(
-        _persist((repository) => repository.saveEmployee(updatedEmployee)));
+    _showSuccess('Cadastro do colaborador salvo.');
   }
 
-  void _addUnitAssignment(UnitAssignment assignment) {
+  Future<void> _addUnitAssignment(UnitAssignment assignment) async {
+    try {
+      await _persist(
+        (repository) => repository.addUnitAssignment(assignment),
+      );
+    } catch (_) {
+      _showError('Não foi possível salvar a alteração de banca.');
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
     setState(() {
+      _unitAssignments.removeWhere((current) {
+        return current.employeeId == assignment.employeeId &&
+            _sameDay(current.date, assignment.date);
+      });
       _unitAssignments.insert(0, assignment);
       if (_selectedEmployee.id == assignment.employeeId) {
         _selectedUnit = _effectiveUnitFor(_selectedEmployee, DateTime.now());
@@ -1403,14 +1456,51 @@ class _RgtHomePageState extends State<RgtHomePage> {
         );
       }
     });
-    unawaited(
-      _persist((repository) => repository.addUnitAssignment(assignment)),
-    );
+    _showSuccess('Alteração temporária de banca salva.');
   }
 
   void _changeStatement(MonthlyStatement statement) {
     setState(() => _statement = statement);
-    unawaited(_persist((repository) => repository.saveStatement(statement)));
+  }
+
+  Future<void> _selectStatementCompetence(DateTime competence) async {
+    final normalized = DateTime(competence.year, competence.month);
+    setState(() {
+      _statement = emptyStatement(
+        _employeeWithEffectiveUnit(_selectedEmployee, normalized),
+        competence: normalized,
+      );
+    });
+    await _loadStatement(_selectedEmployee, competence: normalized);
+  }
+
+  Future<void> _saveStatement(MonthlyStatement statement) async {
+    if (_isSavingStatement) {
+      return;
+    }
+    setState(() => _isSavingStatement = true);
+    try {
+      await _persist((repository) => repository.saveStatement(statement));
+      if (mounted) {
+        setState(() {
+          _statement = statement;
+          final now = DateTime.now();
+          if (statement.referenceMonth.year == now.year &&
+              statement.referenceMonth.month == now.month) {
+            _statementsByEmployee[statement.employee.id] = statement;
+          }
+        });
+        _showSuccess('Demonstrativo mensal salvo com sucesso.');
+      }
+    } catch (_) {
+      _showError(
+        'Não foi possível salvar o demonstrativo. Nenhum dado foi alterado.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingStatement = false);
+      }
+    }
   }
 
   Future<void> _persist(
@@ -1424,7 +1514,7 @@ class _RgtHomePageState extends State<RgtHomePage> {
     try {
       await operation(repository);
     } catch (_) {
-      return;
+      rethrow;
     }
   }
 
@@ -1450,13 +1540,31 @@ class _RgtHomePageState extends State<RgtHomePage> {
     });
   }
 
+  void _showSuccess(String message) => _showMessage(message);
+
+  void _showError(String message) => _showMessage(message, error: true);
+
+  void _showMessage(String message, {bool error = false}) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: error ? const Color(0xFF8E2F2F) : null,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
   Future<void> _openReportOptions() async {
     final options = await showDialog<ReportOptions>(
       context: context,
       builder: (context) {
         return ReportOptionsDialog(
           employees: _effectiveEmployeesToday,
-          selectedEmployee: _selectedEmployee,
           selectedUnit: _selectedUnit,
         );
       },
@@ -1466,51 +1574,57 @@ class _RgtHomePageState extends State<RgtHomePage> {
       return;
     }
 
+    ReportData data;
+    try {
+      final repository = _repository;
+      data = repository != null && repository.canPersist
+          ? await repository.fetchReportData(options)
+          : _localReportData(options);
+    } catch (_) {
+      if (mounted) {
+        _showError('Não foi possível carregar os dados do relatório.');
+      }
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
     await showDialog<void>(
       context: context,
       builder: (context) {
-        return ReportPreviewDialog(
-          options: options,
-          selectedEmployee: _employeeWithEffectiveUnit(
-            _selectedEmployee,
-            DateTime.now(),
-          ),
-          selectedStatement: _statement,
-          cashClosings: _cashClosings,
-          statementForEmployee: _statementForReport,
-        );
+        return ReportPreviewDialog(data: data);
       },
     );
   }
 
-  String reportMessage(ReportOptions options) {
-    final parts = <String>[];
+  ReportData _localReportData(ReportOptions options) {
+    final selectedIds =
+        options.selectedEmployees.map((employee) => employee.id).toSet();
+    final sameCompetence =
+        _statement.referenceMonth.year == options.competence.year &&
+            _statement.referenceMonth.month == options.competence.month;
+    final statements = {
+      for (final employee in options.selectedEmployees)
+        employee.id: employee.id == _selectedEmployee.id && sameCompetence
+            ? _statement.copyWith(employee: employee)
+            : emptyStatement(employee, competence: options.competence),
+    };
+    final closings = _cashClosings.where((entry) {
+      final date = DateTime(entry.date.year, entry.date.month, entry.date.day);
+      final inPeriod =
+          !date.isBefore(options.startDate) && !date.isAfter(options.endDate);
+      final inUnit = options.unit == null || entry.unit == options.unit;
+      return inPeriod && inUnit && selectedIds.contains(entry.employee.id);
+    }).toList();
 
-    if (options.includeFinancialStatement) {
-      parts.add('demonstrativo mensal');
-    }
-    if (options.includeGeneralCashClosing) {
-      parts.add('fechamento de caixa geral');
-    }
-    if (options.includeEmployeeCashClosing) {
-      parts.add(
-        'fechamento por ${_collaboratorCountLabel(options.selectedEmployees.length)}',
-      );
-    }
-
-    return 'Relatório preparado: ${parts.join(', ')}.';
-  }
-
-  String _collaboratorCountLabel(int count) {
-    return count == 1 ? '1 colaborador' : '$count colaboradores';
-  }
-
-  MonthlyStatement _statementForReport(Employee employee) {
-    if (employee.id == _selectedEmployee.id) {
-      return _statement.copyWith(employee: employee);
-    }
-
-    return sampleStatement(employee);
+    return ReportData(
+      options: options,
+      statements: statements,
+      cashClosings: closings,
+      generatedAt: DateTime.now(),
+    );
   }
 
   @override
@@ -1527,6 +1641,7 @@ class _RgtHomePageState extends State<RgtHomePage> {
       DashboardPage(
         employees: effectiveEmployees,
         cashClosings: _cashClosings,
+        statements: _statementsByEmployee,
         selectedUnitFilter: _dashboardUnitFilter,
         onUnitFilterChanged: (unit) {
           setState(() => _dashboardUnitFilter = unit);
@@ -1554,6 +1669,9 @@ class _RgtHomePageState extends State<RgtHomePage> {
           DateTime.now(),
         ),
         onChanged: _changeStatement,
+        onSave: _saveStatement,
+        isSaving: _isSavingStatement,
+        onCompetenceSelected: _selectStatementCompetence,
         onEmployeeSelected: (employee) {
           final currentEmployee = _currentEmployeeById(employee.id);
           setState(() {
@@ -1744,13 +1862,11 @@ class PageTransitionHost extends StatelessWidget {
 class ReportOptionsDialog extends StatefulWidget {
   const ReportOptionsDialog({
     required this.employees,
-    required this.selectedEmployee,
     required this.selectedUnit,
     super.key,
   });
 
   final List<Employee> employees;
-  final Employee selectedEmployee;
   final Unit selectedUnit;
 
   @override
@@ -1761,23 +1877,37 @@ class _ReportOptionsDialogState extends State<ReportOptionsDialog> {
   var _includeFinancialStatement = true;
   var _includeGeneralCashClosing = true;
   var _includeEmployeeCashClosing = true;
-  late final Set<String> _selectedEmployeeIds = {
-    if (widget.selectedUnit != Unit.geral) widget.selectedEmployee.id,
-  };
+  late DateTime _competence;
+  late DateTime _startDate;
+  late DateTime _endDate;
+  late Unit _selectedUnit;
+  final Set<String> _selectedEmployeeIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    final today = DateTime.now();
+    _competence = DateTime(today.year, today.month);
+    _startDate = DateTime(today.year, today.month);
+    _endDate = DateTime(today.year, today.month, today.day);
+    _selectedUnit = widget.selectedUnit;
+    _selectAllVisible();
+  }
 
   bool get _hasSelection {
-    return _includeFinancialStatement ||
-        _includeGeneralCashClosing ||
-        (_includeEmployeeCashClosing && _selectedEmployees.isNotEmpty);
+    final employeeReportSelected =
+        _includeFinancialStatement || _includeEmployeeCashClosing;
+    return _includeGeneralCashClosing ||
+        (employeeReportSelected && _selectedEmployees.isNotEmpty);
   }
 
   List<Employee> get _employeeOptions {
-    if (widget.selectedUnit == Unit.geral) {
+    if (_selectedUnit == Unit.geral) {
       return widget.employees;
     }
 
     return widget.employees.where((employee) {
-      return employee.unit == widget.selectedUnit;
+      return employee.unit == _selectedUnit;
     }).toList();
   }
 
@@ -1794,8 +1924,47 @@ class _ReportOptionsDialogState extends State<ReportOptionsDialog> {
         includeGeneralCashClosing: _includeGeneralCashClosing,
         includeEmployeeCashClosing: _includeEmployeeCashClosing,
         selectedEmployees: _selectedEmployees,
+        competence: _competence,
+        startDate: _startDate,
+        endDate: _endDate,
+        unit: _selectedUnit == Unit.geral ? null : _selectedUnit,
       ),
     );
+  }
+
+  void _selectAllVisible() {
+    _selectedEmployeeIds
+      ..clear()
+      ..addAll(_employeeOptions.map((employee) => employee.id));
+  }
+
+  Future<void> _pickCompetence() async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _competence,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(DateTime.now().year + 1, 12, 31),
+      helpText: 'Selecione a competência',
+    );
+    if (selected != null) {
+      setState(() => _competence = DateTime(selected.year, selected.month));
+    }
+  }
+
+  Future<void> _pickPeriod() async {
+    final selected = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(DateTime.now().year + 1, 12, 31),
+      initialDateRange: DateTimeRange(start: _startDate, end: _endDate),
+      helpText: 'Selecione o período do relatório',
+    );
+    if (selected != null) {
+      setState(() {
+        _startDate = selected.start;
+        _endDate = selected.end;
+      });
+    }
   }
 
   @override
@@ -1810,15 +1979,68 @@ class _ReportOptionsDialogState extends State<ReportOptionsDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                widget.selectedUnit == Unit.geral
+                _selectedUnit == Unit.geral
                     ? 'Todos os colaboradores'
-                    : '${widget.selectedUnit.label} - ${widget.selectedEmployee.name}',
+                    : _selectedUnit.label,
                 style: const TextStyle(color: Color(0xFF5E6762)),
               ),
               const SizedBox(height: 16),
+              DropdownButtonFormField<Unit>(
+                initialValue: _selectedUnit,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Banca',
+                ),
+                items: Unit.values
+                    .where((unit) =>
+                        unit != Unit.geralBanca ||
+                        widget.employees
+                            .any((employee) => employee.unit == unit))
+                    .map(
+                      (unit) => DropdownMenuItem(
+                        value: unit,
+                        child: Text(unit.label),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (unit) {
+                  if (unit == null) {
+                    return;
+                  }
+                  setState(() {
+                    _selectedUnit = unit;
+                    _selectAllVisible();
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _pickCompetence,
+                      icon: const Icon(Icons.event_note_outlined),
+                      label: Text(
+                        'Competência ${_competence.month.toString().padLeft(2, '0')}/${_competence.year}',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _pickPeriod,
+                      icon: const Icon(Icons.date_range_outlined),
+                      label: Text(
+                        '${formatDate(_startDate)} a ${formatDate(_endDate)}',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               ReportCheckbox(
                 title: 'Demonstrativo mensal',
-                subtitle: 'Resumo financeiro do colaborador selecionado.',
+                subtitle: 'Resumo financeiro dos colaboradores selecionados.',
                 value: _includeFinancialStatement,
                 onChanged: (value) {
                   setState(() => _includeFinancialStatement = value);
@@ -1826,7 +2048,7 @@ class _ReportOptionsDialogState extends State<ReportOptionsDialog> {
               ),
               ReportCheckbox(
                 title: 'Fechamento de caixa geral',
-                subtitle: 'Consolidado mensal por todas as unidades.',
+                subtitle: 'Consolidado do período e das bancas filtradas.',
                 value: _includeGeneralCashClosing,
                 onChanged: (value) {
                   setState(() => _includeGeneralCashClosing = value);
@@ -1834,7 +2056,7 @@ class _ReportOptionsDialogState extends State<ReportOptionsDialog> {
               ),
               ReportCheckbox(
                 title: 'Fechamento de caixa por colaborador',
-                subtitle: widget.selectedUnit == Unit.geral
+                subtitle: _selectedUnit == Unit.geral
                     ? 'Escolha os colaboradores que entrarão no relatório.'
                     : 'Lançamentos dos colaboradores selecionados.',
                 value: _includeEmployeeCashClosing,
@@ -1842,7 +2064,8 @@ class _ReportOptionsDialogState extends State<ReportOptionsDialog> {
                   setState(() => _includeEmployeeCashClosing = value);
                 },
               ),
-              if (_includeEmployeeCashClosing) ...[
+              if (_includeFinancialStatement ||
+                  _includeEmployeeCashClosing) ...[
                 const SizedBox(height: 8),
                 ReportEmployeeSelection(
                   employees: _employeeOptions,
@@ -1856,6 +2079,15 @@ class _ReportOptionsDialogState extends State<ReportOptionsDialog> {
                       }
                     });
                   },
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => setState(_selectAllVisible),
+                    icon: const Icon(Icons.done_all_outlined),
+                    label: const Text('Selecionar todos'),
+                  ),
                 ),
               ],
             ],
@@ -1945,32 +2177,18 @@ class ReportEmployeeSelection extends StatelessWidget {
 
 class ReportPreviewDialog extends StatelessWidget {
   const ReportPreviewDialog({
-    required this.options,
-    required this.selectedEmployee,
-    required this.selectedStatement,
-    required this.cashClosings,
-    required this.statementForEmployee,
+    required this.data,
     super.key,
   });
 
-  final ReportOptions options;
-  final Employee selectedEmployee;
-  final MonthlyStatement selectedStatement;
-  final List<CashClosingEntry> cashClosings;
-  final MonthlyStatement Function(Employee employee) statementForEmployee;
+  final ReportData data;
 
   @override
   Widget build(BuildContext context) {
-    final today = DateTime.now();
-    final monthClosings = _entriesUntil(today);
+    final options = data.options;
+    final today = data.generatedAt;
+    final monthClosings = data.cashClosings;
     final generalClosing = CashClosingReportSummary.fromEntries(monthClosings);
-    final statement = selectedStatement.copyWith(employee: selectedEmployee);
-    final statementSummary = const RgtCalculator().calculate(
-      statement,
-      cashClosings: cashClosings,
-      today: today,
-      restrictCashClosingsToStatementUnit: false,
-    );
 
     return AlertDialog(
       title: const Text('Relatório gerado'),
@@ -1991,26 +2209,40 @@ class ReportPreviewDialog extends StatelessWidget {
                 style: TextStyle(color: Color(0xFF5E6762)),
               ),
               const SizedBox(height: 16),
+              ReportInfoRow(
+                label: 'Competência',
+                value:
+                    '${options.competence.month.toString().padLeft(2, '0')}/${options.competence.year}',
+              ),
+              ReportInfoRow(
+                label: 'Período',
+                value:
+                    '${formatDate(options.startDate)} a ${formatDate(options.endDate)}',
+              ),
+              ReportInfoRow(
+                label: 'Banca',
+                value: options.unit?.label ?? 'Todas as bancas',
+              ),
+              const SizedBox(height: 16),
               if (options.includeFinancialStatement) ...[
                 SectionPanel(
-                  title: 'Demonstrativo mensal',
+                  title: 'Demonstrativos mensais',
                   child: Column(
                     children: [
-                      ReportInfoRow(
-                        label: 'Colaborador',
-                        value: selectedEmployee.name,
-                      ),
-                      ReportInfoRow(
-                        label: 'Banca',
-                        value: selectedEmployee.unit.label,
-                      ),
-                      ReportInfoRow(
-                        label: 'Mês de referência',
-                        value:
-                            '${statement.referenceMonth.month.toString().padLeft(2, '0')}/${statement.referenceMonth.year}',
-                      ),
-                      const Divider(height: 24),
-                      SummaryTable(summary: statementSummary),
+                      for (final employee in options.selectedEmployees)
+                        ReportStatementBlock(
+                          employee: employee,
+                          statement: data.statements[employee.id] ??
+                              emptyStatement(
+                                employee,
+                                competence: options.competence,
+                              ),
+                          entries: monthClosings.where((entry) {
+                            return entry.employee.id == employee.id;
+                          }).toList(),
+                          fromDate: options.startDate,
+                          throughDate: options.endDate,
+                        ),
                     ],
                   ),
                 ),
@@ -2071,10 +2303,16 @@ class ReportPreviewDialog extends StatelessWidget {
                             for (final employee in options.selectedEmployees)
                               ReportEmployeeClosingBlock(
                                 employee: employee,
-                                statement: statementForEmployee(employee),
+                                statement: data.statements[employee.id] ??
+                                    emptyStatement(
+                                      employee,
+                                      competence: options.competence,
+                                    ),
                                 entries: monthClosings.where((entry) {
                                   return entry.employee.id == employee.id;
                                 }).toList(),
+                                fromDate: options.startDate,
+                                throughDate: options.endDate,
                               ),
                           ],
                         ),
@@ -2084,6 +2322,16 @@ class ReportPreviewDialog extends StatelessWidget {
         ),
       ),
       actions: [
+        OutlinedButton.icon(
+          onPressed: () => _export(context, ReportExportFormat.excel),
+          icon: const Icon(Icons.table_view_outlined),
+          label: const Text('Exportar Excel'),
+        ),
+        OutlinedButton.icon(
+          onPressed: () => _export(context, ReportExportFormat.pdf),
+          icon: const Icon(Icons.picture_as_pdf_outlined),
+          label: const Text('Exportar PDF'),
+        ),
         FilledButton.icon(
           onPressed: () => Navigator.of(context).pop(),
           icon: const Icon(Icons.check_outlined),
@@ -2093,12 +2341,27 @@ class ReportPreviewDialog extends StatelessWidget {
     );
   }
 
-  List<CashClosingEntry> _entriesUntil(DateTime today) {
-    return cashClosings.where((entry) {
-      return entry.date.year == today.year &&
-          entry.date.month == today.month &&
-          !entry.date.isAfter(today);
-    }).toList();
+  Future<void> _export(
+    BuildContext context,
+    ReportExportFormat format,
+  ) async {
+    try {
+      final path = await const ReportFileSaver().export(data, format);
+      if (context.mounted && path != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Relatório salvo em $path')),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Não foi possível exportar o relatório.'),
+            backgroundColor: Color(0xFF8E2F2F),
+          ),
+        );
+      }
+    }
   }
 
   String _formatDateTime(DateTime date) {
@@ -2110,17 +2373,71 @@ class ReportPreviewDialog extends StatelessWidget {
   }
 }
 
-class ReportEmployeeClosingBlock extends StatelessWidget {
-  const ReportEmployeeClosingBlock({
+class ReportStatementBlock extends StatelessWidget {
+  const ReportStatementBlock({
     required this.employee,
     required this.statement,
     required this.entries,
+    required this.fromDate,
+    required this.throughDate,
     super.key,
   });
 
   final Employee employee;
   final MonthlyStatement statement;
   final List<CashClosingEntry> entries;
+  final DateTime fromDate;
+  final DateTime throughDate;
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = const RgtCalculator().calculate(
+      statement.copyWith(employee: employee),
+      cashClosings: entries,
+      startDate: fromDate,
+      today: throughDate,
+      restrictCashClosingsToStatementUnit: false,
+    );
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F7F4),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE1E5DF)),
+      ),
+      child: Column(
+        children: [
+          ReportInfoRow(label: 'Colaborador', value: employee.name),
+          ReportInfoRow(label: 'Banca', value: employee.unit.label),
+          ReportInfoRow(
+            label: 'Competência',
+            value:
+                '${statement.referenceMonth.month.toString().padLeft(2, '0')}/${statement.referenceMonth.year}',
+          ),
+          const Divider(height: 20),
+          SummaryTable(summary: summary),
+        ],
+      ),
+    );
+  }
+}
+
+class ReportEmployeeClosingBlock extends StatelessWidget {
+  const ReportEmployeeClosingBlock({
+    required this.employee,
+    required this.statement,
+    required this.entries,
+    required this.fromDate,
+    required this.throughDate,
+    super.key,
+  });
+
+  final Employee employee;
+  final MonthlyStatement statement;
+  final List<CashClosingEntry> entries;
+  final DateTime fromDate;
+  final DateTime throughDate;
 
   @override
   Widget build(BuildContext context) {
@@ -2128,7 +2445,8 @@ class ReportEmployeeClosingBlock extends StatelessWidget {
     final summary = const RgtCalculator().calculate(
       statement.copyWith(employee: employee),
       cashClosings: entries,
-      today: DateTime.now(),
+      startDate: fromDate,
+      today: throughDate,
       restrictCashClosingsToStatementUnit: false,
     );
 
@@ -2409,6 +2727,7 @@ class DashboardPage extends StatefulWidget {
   const DashboardPage({
     required this.employees,
     required this.cashClosings,
+    required this.statements,
     required this.selectedUnitFilter,
     required this.onUnitFilterChanged,
     super.key,
@@ -2416,6 +2735,7 @@ class DashboardPage extends StatefulWidget {
 
   final List<Employee> employees;
   final List<CashClosingEntry> cashClosings;
+  final Map<String, MonthlyStatement> statements;
   final Unit? selectedUnitFilter;
   final ValueChanged<Unit?> onUnitFilterChanged;
 
@@ -2453,7 +2773,8 @@ class _DashboardPageState extends State<DashboardPage> {
 
       for (final employee in effectiveEmployees) {
         final summary = calculator.calculate(
-          sampleStatement(employee),
+          (widget.statements[employee.id] ?? emptyStatement(employee))
+              .copyWith(employee: employee),
           cashClosings: widget.cashClosings,
         );
         revenues += summary.revenues;
@@ -2486,7 +2807,8 @@ class _DashboardPageState extends State<DashboardPage> {
           }).map((summary) {
             final employee = _selectedGlobalEmployee!;
             final financialSummary = const RgtCalculator().calculate(
-              sampleStatement(employee),
+              (widget.statements[employee.id] ?? emptyStatement(employee))
+                  .copyWith(employee: employee),
               cashClosings: widget.cashClosings,
             );
 
@@ -2832,8 +3154,8 @@ class EmployeesPage extends StatelessWidget {
   final Unit Function(Employee employee, DateTime date) effectiveUnitForDate;
   final ValueChanged<Unit> onUnitSelected;
   final ValueChanged<Employee> onEmployeeSelected;
-  final ValueChanged<Employee> onEmployeeSaved;
-  final ValueChanged<UnitAssignment> onUnitAssignmentAdded;
+  final Future<void> Function(Employee) onEmployeeSaved;
+  final Future<void> Function(UnitAssignment) onUnitAssignmentAdded;
 
   @override
   Widget build(BuildContext context) {
@@ -2951,8 +3273,8 @@ class EmployeeEditorPanel extends StatefulWidget {
   final Employee employee;
   final Unit effectiveUnit;
   final List<UnitAssignment> assignments;
-  final ValueChanged<Employee> onEmployeeSaved;
-  final ValueChanged<UnitAssignment> onUnitAssignmentAdded;
+  final Future<void> Function(Employee) onEmployeeSaved;
+  final Future<void> Function(UnitAssignment) onUnitAssignmentAdded;
 
   @override
   State<EmployeeEditorPanel> createState() => _EmployeeEditorPanelState();
@@ -2963,6 +3285,8 @@ class _EmployeeEditorPanelState extends State<EmployeeEditorPanel> {
   late Unit _baseUnit;
   late Unit _temporaryUnit;
   var _assignmentDate = DateTime.now();
+  var _isSavingEmployee = false;
+  var _isSavingAssignment = false;
 
   @override
   void initState() {
@@ -3011,19 +3335,24 @@ class _EmployeeEditorPanelState extends State<EmployeeEditorPanel> {
     }
   }
 
-  void _saveEmployee() {
+  Future<void> _saveEmployee() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       return;
     }
 
-    widget.onEmployeeSaved(
+    setState(() => _isSavingEmployee = true);
+    await widget.onEmployeeSaved(
       widget.employee.copyWith(name: name, unit: _baseUnit),
     );
+    if (mounted) {
+      setState(() => _isSavingEmployee = false);
+    }
   }
 
-  void _launchTemporaryUnit() {
-    widget.onUnitAssignmentAdded(
+  Future<void> _launchTemporaryUnit() async {
+    setState(() => _isSavingAssignment = true);
+    await widget.onUnitAssignmentAdded(
       UnitAssignment(
         id: 'unit-${DateTime.now().microsecondsSinceEpoch}',
         employeeId: widget.employee.id,
@@ -3035,6 +3364,9 @@ class _EmployeeEditorPanelState extends State<EmployeeEditorPanel> {
         unit: _temporaryUnit,
       ),
     );
+    if (mounted) {
+      setState(() => _isSavingAssignment = false);
+    }
   }
 
   @override
@@ -3083,9 +3415,11 @@ class _EmployeeEditorPanelState extends State<EmployeeEditorPanel> {
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton.icon(
-              onPressed: _saveEmployee,
+              onPressed: _isSavingEmployee ? null : _saveEmployee,
               icon: const Icon(Icons.save_outlined),
-              label: const Text('Salvar cadastro'),
+              label: Text(
+                _isSavingEmployee ? 'Salvando...' : 'Salvar cadastro',
+              ),
             ),
           ),
           const Divider(height: 28),
@@ -3128,9 +3462,11 @@ class _EmployeeEditorPanelState extends State<EmployeeEditorPanel> {
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton.icon(
-              onPressed: _launchTemporaryUnit,
+              onPressed: _isSavingAssignment ? null : _launchTemporaryUnit,
               icon: const Icon(Icons.sync_alt_outlined),
-              label: const Text('Lançar banca temporária'),
+              label: Text(
+                _isSavingAssignment ? 'Salvando...' : 'Lançar banca temporária',
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -3264,6 +3600,9 @@ class StatementPage extends StatelessWidget {
     required this.selectedUnit,
     required this.selectedEmployee,
     required this.onChanged,
+    required this.onSave,
+    required this.isSaving,
+    required this.onCompetenceSelected,
     required this.onUnitSelected,
     required this.onEmployeeSelected,
     required this.effectiveUnitForDate,
@@ -3278,19 +3617,62 @@ class StatementPage extends StatelessWidget {
   final Unit selectedUnit;
   final Employee selectedEmployee;
   final ValueChanged<MonthlyStatement> onChanged;
+  final Future<void> Function(MonthlyStatement statement) onSave;
+  final bool isSaving;
+  final Future<void> Function(DateTime competence) onCompetenceSelected;
   final ValueChanged<Unit> onUnitSelected;
   final ValueChanged<Employee> onEmployeeSelected;
   final Unit Function(Employee employee, DateTime date) effectiveUnitForDate;
-  final ValueChanged<CashClosingEntry> onCashClosingAdded;
+  final Future<void> Function(CashClosingEntry) onCashClosingAdded;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        PageTitle(
-          title: 'Demonstrativo mensal',
-          subtitle: statement.employee.name,
+        Row(
+          children: [
+            Expanded(
+              child: PageTitle(
+                title: 'Demonstrativo mensal',
+                subtitle: statement.employee.name,
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: isSaving ? null : () => onSave(statement),
+              icon: isSaving
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save_outlined),
+              label: Text(isSaving ? 'Salvando...' : 'Salvar demonstrativo'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: () async {
+              final selected = await showDatePicker(
+                context: context,
+                initialDate: statement.referenceMonth,
+                firstDate: DateTime(2020),
+                lastDate: DateTime(DateTime.now().year + 1, 12, 31),
+                helpText: 'Selecione a competência',
+              );
+              if (selected != null) {
+                await onCompetenceSelected(
+                  DateTime(selected.year, selected.month),
+                );
+              }
+            },
+            icon: const Icon(Icons.event_note_outlined),
+            label: Text(
+              'Competência ${statement.referenceMonth.month.toString().padLeft(2, '0')}/${statement.referenceMonth.year}',
+            ),
+          ),
         ),
         const SizedBox(height: 16),
         ResponsiveGrid(
@@ -3337,6 +3719,7 @@ class StatementPage extends StatelessWidget {
                   const SizedBox(height: 4),
                   DropdownButtonFormField<Incentive>(
                     initialValue: statement.incentive,
+                    hint: const Text('Selecione a pontuação'),
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       labelText: 'Pontuação de incentivo',
@@ -3358,7 +3741,7 @@ class StatementPage extends StatelessWidget {
                   const SizedBox(height: 12),
                   ReadOnlyMoneyField(
                     label: 'Valor do incentivo',
-                    value: statement.incentive.amount,
+                    value: statement.incentive?.amount ?? 0,
                   ),
                 ],
               ),
@@ -3435,7 +3818,7 @@ class CashClosingPage extends StatefulWidget {
   final ValueChanged<Unit> onUnitSelected;
   final ValueChanged<Employee> onEmployeeSelected;
   final Unit Function(Employee employee, DateTime date) effectiveUnitForDate;
-  final ValueChanged<CashClosingEntry> onEntryAdded;
+  final Future<void> Function(CashClosingEntry) onEntryAdded;
   final bool embedded;
 
   @override
@@ -3448,6 +3831,7 @@ class _CashClosingPageState extends State<CashClosingPage> {
   var _type = CashClosingType.positive;
   var _amount = 0.0;
   var _deductFromPayroll = false;
+  var _isSaving = false;
 
   @override
   void dispose() {
@@ -3526,7 +3910,7 @@ class _CashClosingPageState extends State<CashClosingPage> {
     }
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (_amount <= 0) {
       return;
     }
@@ -3534,25 +3918,36 @@ class _CashClosingPageState extends State<CashClosingPage> {
     final description = _descriptionController.text.trim();
     final entryEmployee = widget.selectedEmployee;
     final entryUnit = widget.effectiveUnitForDate(entryEmployee, _date);
-    widget.onEntryAdded(
-      CashClosingEntry(
-        id: 'cx-${DateTime.now().microsecondsSinceEpoch}',
-        date: _date,
-        unit: entryUnit,
-        employee: entryEmployee.copyWith(unit: entryUnit),
-        type: _type,
-        amount: _amount,
-        description: description.isEmpty ? 'Fechamento de caixa' : description,
-        deductFromPayroll:
-            _type == CashClosingType.negative && _deductFromPayroll,
-      ),
-    );
-
-    setState(() {
-      _amount = 0;
-      _descriptionController.clear();
-      _deductFromPayroll = false;
-    });
+    setState(() => _isSaving = true);
+    try {
+      await widget.onEntryAdded(
+        CashClosingEntry(
+          id: 'cx-${DateTime.now().microsecondsSinceEpoch}',
+          date: _date,
+          unit: entryUnit,
+          employee: entryEmployee.copyWith(unit: entryUnit),
+          type: _type,
+          amount: _amount,
+          description:
+              description.isEmpty ? 'Fechamento de caixa' : description,
+          deductFromPayroll:
+              _type == CashClosingType.negative && _deductFromPayroll,
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          _amount = 0;
+          _descriptionController.clear();
+          _deductFromPayroll = false;
+        });
+      }
+    } catch (_) {
+      // A tela principal apresenta a mensagem e preservamos o formulário.
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 
   @override
@@ -3566,7 +3961,7 @@ class _CashClosingPageState extends State<CashClosingPage> {
         : employees.contains(widget.selectedEmployee)
             ? widget.selectedEmployee
             : null;
-    final canSubmit = _amount > 0 && selectedEmployee != null;
+    final canSubmit = _amount > 0 && selectedEmployee != null && !_isSaving;
 
     final content = [
       const PageTitle(
@@ -3713,8 +4108,13 @@ class _CashClosingPageState extends State<CashClosingPage> {
                   width: double.infinity,
                   child: FilledButton.icon(
                     onPressed: canSubmit ? _submit : null,
-                    icon: const Icon(Icons.save_outlined),
-                    label: const Text('Lançar caixa'),
+                    icon: _isSaving
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.save_outlined),
+                    label: Text(_isSaving ? 'Salvando...' : 'Lançar caixa'),
                   ),
                 ),
               ],
@@ -3960,7 +4360,9 @@ class _MoneyFieldState extends State<MoneyField> {
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: widget.value.toStringAsFixed(2));
+    _controller = TextEditingController(
+      text: widget.value == 0 ? '' : widget.value.toStringAsFixed(2),
+    );
   }
 
   @override
@@ -3969,7 +4371,8 @@ class _MoneyFieldState extends State<MoneyField> {
     if (oldWidget.value != widget.value &&
         double.tryParse(_controller.text.replaceAll(',', '.')) !=
             widget.value) {
-      _controller.text = widget.value.toStringAsFixed(2);
+      _controller.text =
+          widget.value == 0 ? '' : widget.value.toStringAsFixed(2);
     }
   }
 
@@ -4413,6 +4816,8 @@ class SummaryRow extends StatelessWidget {
   }
 }
 
+const _notProvided = Object();
+
 extension MonthlyStatementCopy on MonthlyStatement {
   MonthlyStatement copyWith({
     Employee? employee,
@@ -4421,7 +4826,7 @@ extension MonthlyStatementCopy on MonthlyStatement {
     double? vouchers,
     List<AbsenceEntry>? absences,
     int? attendanceScore,
-    Incentive? incentive,
+    Object? incentive = _notProvided,
     double? balanceBonus,
     bool? launchBalanceBonusAsRevenue,
     List<CashEntry>? negativeCashEntries,
@@ -4434,7 +4839,9 @@ extension MonthlyStatementCopy on MonthlyStatement {
       vouchers: vouchers ?? this.vouchers,
       absences: absences ?? this.absences,
       attendanceScore: attendanceScore ?? this.attendanceScore,
-      incentive: incentive ?? this.incentive,
+      incentive: identical(incentive, _notProvided)
+          ? this.incentive
+          : incentive as Incentive?,
       balanceBonus: balanceBonus ?? this.balanceBonus,
       launchBalanceBonusAsRevenue:
           launchBalanceBonusAsRevenue ?? this.launchBalanceBonusAsRevenue,

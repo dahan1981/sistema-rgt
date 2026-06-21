@@ -1,7 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'models.dart';
-import 'sample_data.dart';
+import 'initial_data.dart';
 import 'supabase_config.dart';
 
 class RgtSnapshot {
@@ -9,11 +9,13 @@ class RgtSnapshot {
     required this.employees,
     required this.unitAssignments,
     required this.cashClosings,
+    required this.statements,
   });
 
   final List<Employee> employees;
   final List<UnitAssignment> unitAssignments;
   final List<CashClosingEntry> cashClosings;
+  final Map<String, MonthlyStatement> statements;
 }
 
 class SupabaseRepository {
@@ -81,15 +83,25 @@ class SupabaseRepository {
         )
         .toList();
 
+    final statements = await Future.wait(
+      employees.map(fetchStatement),
+    );
+
     return RgtSnapshot(
       employees: employees,
       unitAssignments: assignments,
       cashClosings: closings,
+      statements: {
+        for (final statement in statements) statement.employee.id: statement,
+      },
     );
   }
 
-  Future<MonthlyStatement> fetchStatement(Employee employee) async {
-    final referenceMonth = _monthStart(DateTime.now());
+  Future<MonthlyStatement> fetchStatement(
+    Employee employee, {
+    DateTime? competence,
+  }) async {
+    final referenceMonth = _monthStart(competence ?? DateTime.now());
     final rows = await _client
         .from('monthly_statements')
         .select()
@@ -98,7 +110,7 @@ class SupabaseRepository {
         .limit(1);
 
     if (rows.isEmpty) {
-      return sampleStatement(employee);
+      return emptyStatement(employee, competence: referenceMonth);
     }
 
     final row = rows.first;
@@ -128,7 +140,7 @@ class SupabaseRepository {
           )
           .toList(),
       attendanceScore: row['attendance_score'] as int,
-      incentive: _incentiveFromScore(row['incentive_score'] as int),
+      incentive: _incentiveFromScore(row['incentive_score']),
       balanceBonus: _number(row['balance_bonus']),
       launchBalanceBonusAsRevenue:
           row['launch_balance_bonus_as_revenue'] as bool,
@@ -155,11 +167,14 @@ class SupabaseRepository {
   }
 
   Future<void> addUnitAssignment(UnitAssignment assignment) async {
-    await _client.from('unit_assignments').insert({
-      'collaborator_id': assignment.employeeId,
-      'assigned_date': _dateOnly(assignment.date),
-      'unit_id': _unitId(assignment.unit),
-    });
+    await _client.from('unit_assignments').upsert(
+      {
+        'collaborator_id': assignment.employeeId,
+        'assigned_date': _dateOnly(assignment.date),
+        'unit_id': _unitId(assignment.unit),
+      },
+      onConflict: 'collaborator_id,assigned_date',
+    );
   }
 
   Future<void> addCashClosing(CashClosingEntry entry) async {
@@ -176,64 +191,93 @@ class SupabaseRepository {
 
   Future<void> saveStatement(MonthlyStatement statement) async {
     final referenceMonth = _monthStart(statement.referenceMonth);
-    final statementRows = await _client
-        .from('monthly_statements')
-        .upsert(
-          {
-            'collaborator_id': statement.employee.id,
-            'reference_month': _dateOnly(referenceMonth),
-            'salary_forecast': statement.salaryForecast,
-            'vouchers': statement.vouchers,
-            'attendance_score': statement.attendanceScore,
-            'incentive_score': _incentiveScore(statement.incentive),
-            'incentive_amount': statement.incentive.amount,
-            'balance_bonus': statement.balanceBonus,
-            'launch_balance_bonus_as_revenue':
-                statement.launchBalanceBonusAsRevenue,
-            'launch_negative_cash_as_expense':
-                statement.launchNegativeCashAsExpense,
-          },
-          onConflict: 'collaborator_id,reference_month',
+    await _client.rpc(
+      'save_monthly_statement',
+      params: {
+        'p_collaborator_id': statement.employee.id,
+        'p_reference_month': _dateOnly(referenceMonth),
+        'p_salary_forecast': statement.salaryForecast,
+        'p_vouchers': statement.vouchers,
+        'p_attendance_score': statement.attendanceScore,
+        'p_incentive_score': _incentiveScore(statement.incentive),
+        'p_balance_bonus': statement.balanceBonus,
+        'p_launch_balance_bonus_as_revenue':
+            statement.launchBalanceBonusAsRevenue,
+        'p_launch_negative_cash_as_expense':
+            statement.launchNegativeCashAsExpense,
+        'p_absences': statement.absences
+            .map(
+              (absence) => {
+                'absence_date': _dateOnly(absence.date),
+                'as_expense': absence.asExpense,
+              },
+            )
+            .toList(),
+        'p_negative_cash_entries': statement.negativeCashEntries
+            .map(
+              (entry) => {
+                'entry_date': _dateOnly(entry.date),
+                'description': entry.description,
+                'amount': entry.amount,
+              },
+            )
+            .toList(),
+      },
+    );
+  }
+
+  Future<ReportData> fetchReportData(ReportOptions options) async {
+    final statements = await Future.wait(
+      options.selectedEmployees.map(
+        (employee) => fetchStatement(employee, competence: options.competence),
+      ),
+    );
+
+    var query = _client
+        .from('cash_closings')
+        .select(
+          'id, entry_date, unit_id, collaborator_id, kind, amount, description, deduct_from_payroll',
         )
-        .select('id');
-    final statementId = statementRows.first['id'] as String;
-
-    await _client
-        .from('absence_entries')
-        .delete()
-        .eq('monthly_statement_id', statementId);
-    if (statement.absences.isNotEmpty) {
-      await _client.from('absence_entries').insert(
-            statement.absences
-                .map(
-                  (absence) => {
-                    'monthly_statement_id': statementId,
-                    'absence_date': _dateOnly(absence.date),
-                    'as_expense': absence.asExpense,
-                  },
-                )
-                .toList(),
-          );
+        .gte('entry_date', _dateOnly(options.startDate))
+        .lte('entry_date', _dateOnly(options.endDate));
+    if (options.unit != null && options.unit != Unit.geral) {
+      query = query.eq('unit_id', _unitId(options.unit!));
+    }
+    if (options.selectedEmployees.isNotEmpty) {
+      query = query.inFilter(
+        'collaborator_id',
+        options.selectedEmployees.map((employee) => employee.id).toList(),
+      );
     }
 
-    await _client
-        .from('negative_cash_entries')
-        .delete()
-        .eq('monthly_statement_id', statementId);
-    if (statement.negativeCashEntries.isNotEmpty) {
-      await _client.from('negative_cash_entries').insert(
-            statement.negativeCashEntries
-                .map(
-                  (entry) => {
-                    'monthly_statement_id': statementId,
-                    'entry_date': _dateOnly(entry.date),
-                    'description': entry.description,
-                    'amount': entry.amount,
-                  },
-                )
-                .toList(),
-          );
-    }
+    final rows = await query.order('entry_date', ascending: true);
+    final employeesById = {
+      for (final employee in options.selectedEmployees) employee.id: employee,
+    };
+    final closings = rows
+        .where((row) => employeesById.containsKey(row['collaborator_id']))
+        .map<CashClosingEntry>(
+          (row) => CashClosingEntry(
+            id: row['id'] as String,
+            date: DateTime.parse(row['entry_date'] as String),
+            unit: _unitFromId(row['unit_id'] as String),
+            employee: employeesById[row['collaborator_id']]!,
+            type: _cashClosingTypeFromId(row['kind'] as String),
+            amount: _number(row['amount']),
+            description: row['description'] as String,
+            deductFromPayroll: row['deduct_from_payroll'] as bool,
+          ),
+        )
+        .toList();
+
+    return ReportData(
+      options: options,
+      statements: {
+        for (final statement in statements) statement.employee.id: statement,
+      },
+      cashClosings: closings,
+      generatedAt: DateTime.now(),
+    );
   }
 
   String _dateOnly(DateTime date) {
@@ -288,19 +332,21 @@ class SupabaseRepository {
     return type == CashClosingType.negative ? 'negative' : 'positive';
   }
 
-  Incentive _incentiveFromScore(int score) {
+  Incentive? _incentiveFromScore(Object? score) {
     return switch (score) {
       2 => Incentive.score2,
       3 => Incentive.score3,
-      _ => Incentive.score1,
+      1 => Incentive.score1,
+      _ => null,
     };
   }
 
-  int _incentiveScore(Incentive incentive) {
+  int? _incentiveScore(Incentive? incentive) {
     return switch (incentive) {
       Incentive.score1 => 1,
       Incentive.score2 => 2,
       Incentive.score3 => 3,
+      null => null,
     };
   }
 }

@@ -43,9 +43,8 @@ class UpdateChecker {
     final shouldCloseClient = _client == null;
 
     try {
-      final response = await client
-          .get(manifestUri)
-          .timeout(const Duration(seconds: 8));
+      final response =
+          await client.get(manifestUri).timeout(const Duration(seconds: 8));
       if (response.statusCode < 200 || response.statusCode >= 300) {
         return null;
       }

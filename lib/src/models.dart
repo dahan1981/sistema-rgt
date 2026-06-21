@@ -143,17 +143,39 @@ class ReportOptions {
     required this.includeGeneralCashClosing,
     required this.includeEmployeeCashClosing,
     required this.selectedEmployees,
+    required this.competence,
+    required this.startDate,
+    required this.endDate,
+    required this.unit,
   });
 
   final bool includeFinancialStatement;
   final bool includeGeneralCashClosing;
   final bool includeEmployeeCashClosing;
   final List<Employee> selectedEmployees;
+  final DateTime competence;
+  final DateTime startDate;
+  final DateTime endDate;
+  final Unit? unit;
 
   bool get hasSelection =>
       includeFinancialStatement ||
       includeGeneralCashClosing ||
       includeEmployeeCashClosing;
+}
+
+class ReportData {
+  const ReportData({
+    required this.options,
+    required this.statements,
+    required this.cashClosings,
+    required this.generatedAt,
+  });
+
+  final ReportOptions options;
+  final Map<String, MonthlyStatement> statements;
+  final List<CashClosingEntry> cashClosings;
+  final DateTime generatedAt;
 }
 
 class MonthlyStatement {
@@ -177,7 +199,7 @@ class MonthlyStatement {
   final double vouchers;
   final List<AbsenceEntry> absences;
   final int attendanceScore;
-  final Incentive incentive;
+  final Incentive? incentive;
   final double balanceBonus;
   final bool launchBalanceBonusAsRevenue;
   final List<CashEntry> negativeCashEntries;

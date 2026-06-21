@@ -6,6 +6,7 @@ class RgtCalculator {
   FinancialSummary calculate(
     MonthlyStatement statement, {
     List<CashClosingEntry> cashClosings = const [],
+    DateTime? startDate,
     DateTime? today,
     bool restrictCashClosingsToStatementUnit = true,
   }) {
@@ -18,13 +19,14 @@ class RgtCalculator {
       unit:
           restrictCashClosingsToStatementUnit ? statement.employee.unit : null,
       employee: statement.employee,
+      startDate: startDate,
       today: today,
     );
 
     final absenceDiscount =
         statement.salaryForecast / 30 * statement.expenseAbsenceCount;
 
-    final revenues = statement.incentive.amount +
+    final revenues = (statement.incentive?.amount ?? 0) +
         (statement.launchBalanceBonusAsRevenue ? statement.balanceBonus : 0) +
         closingSummary.positive;
 
@@ -48,21 +50,23 @@ class RgtCalculator {
     List<CashClosingEntry> entries, {
     Unit? unit,
     required Employee employee,
+    DateTime? startDate,
     DateTime? today,
   }) {
     final currentDate = today ?? DateTime.now();
+    final periodStart =
+        startDate ?? DateTime(currentDate.year, currentDate.month, 1);
     var positive = 0.0;
     var negative = 0.0;
     var payrollDeductions = 0.0;
 
     for (final entry in entries) {
-      final sameMonth = entry.date.year == currentDate.year &&
-          entry.date.month == currentDate.month;
+      final inPeriod = !entry.date.isBefore(periodStart);
       final untilToday = !entry.date.isAfter(currentDate);
       final sameContext = entry.employee.id == employee.id &&
           (unit == null || entry.unit == unit);
 
-      if (!sameMonth || !untilToday || !sameContext) {
+      if (!inPeriod || !untilToday || !sameContext) {
         continue;
       }
 

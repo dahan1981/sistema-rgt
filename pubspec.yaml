@@ -1,7 +1,7 @@
 name: sistema_rgt
 description: Aplicativo RGT para demonstrativo mensal de entradas e saídas financeiras de colaboradores.
 publish_to: "none"
-version: 0.1.0+1
+version: 0.2.0+2
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_svg: ^2.2.3
+  file_selector: ^1.0.3
   http: ^1.6.0
   package_info_plus: ^10.1.0
   supabase_flutter: ^2.15.0
